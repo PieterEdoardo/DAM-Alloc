@@ -1,6 +1,7 @@
 #project Specific
-/bin
 /.idea
+/build
+/cmake-build-debug
 
 # Prerequisites
 *.d
