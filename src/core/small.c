@@ -21,12 +21,18 @@ void dam_small_init(void) {
         block_size *= SIZE_CLASS_MULTIPLIER;
     }
 
-    size_classes = &size_classes[size_class_count];
+    size_classes = mmap(NULL,
+    size_class_count * sizeof(size_class_t),
+    PROT_READ | PROT_WRITE,
+    MAP_PRIVATE | MAP_ANONYMOUS,
+    -1, 0);
 
+    block_size = DAM_SMALL_MIN;
     for (size_t j = 0; j < size_class_count; j++) {
-        size_classes[size_class_count].block_size = block_size;
-        size_classes[size_class_count].free_list = NULL;
-        size_classes[size_class_count].pools = NULL;
+        size_classes[j].block_size = block_size;
+        size_classes[j].free_list = NULL;
+        size_classes[j].pools = NULL;
+        block_size *= SIZE_CLASS_MULTIPLIER;
     }
 
     DAM_LOG("[INIT] Small allocator initialized (%zu classes)\n", size_class_count);
@@ -34,7 +40,7 @@ void dam_small_init(void) {
 
 static pool_header_t* create_small_pool(uint8_t class_index) {
     // create_small_pool() guarantees free_list != NULL on success
-    size_t pool_size = align_up(size_classes[class_index].block_size * 1000, ALIGNMENT);
+    size_t pool_size = align_up(size_classes[class_index].block_size * 1000 + sizeof(pool_header_t), ALIGNMENT);
 
     DAM_LOG("[POOL] Creating pool #%zu of %zu bytes...\n", sizeof(size_classes->pools), pool_size);
 
@@ -56,8 +62,9 @@ static pool_header_t* create_small_pool(uint8_t class_index) {
     new_pool->memory = memory;
     new_pool->size = pool_size;
     new_pool->type = DAM_POOL_SMALL;
-    new_pool->next = pool_list_head;
+    new_pool->next = size_classes[class_index].pools;
     new_pool->free_list_head = (block_header_t*)((char*)memory + POOL_SMALL_SIZE);
+    size_classes[class_index].pools = new_pool;
 
     stats.pools_created++;
     DAM_LOG("[POOL] Created at %p with %zu bytes usable. Total pools: %zu\n", memory, new_pool->free_list_head->size, stats.pools_created);
@@ -65,8 +72,8 @@ static pool_header_t* create_small_pool(uint8_t class_index) {
 }
 
 uint8_t size_to_class(size_t size) {
-    for (uint8_t i = 0; i < size_class_count; i++) {
-        if (size_classes[i].block_size == size) {
+    for (size_t i = 0; i < size_class_count; i++) {
+        if (size <= size_classes[i].block_size) {
             return i;
         }
     }
