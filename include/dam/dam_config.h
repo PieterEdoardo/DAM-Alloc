@@ -13,6 +13,10 @@
 #define DAM_DEBUG 1
 #endif
 
+#ifndef DAM_DEBUG_ERROR
+#define DAM_DEBUG_ERROR 1
+#endif
+
 #ifndef DAM_ENABLE_STATS
 #define DAM_ENABLE_STATS 1
 #endif

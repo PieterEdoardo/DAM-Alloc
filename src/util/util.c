@@ -18,13 +18,13 @@ int verify_page_size(void) {
     assert(actual > 0);
 
     if ((size_t)actual != PAGE_SIZE) {
-        DAM_LOG_ERR("System page size (%ld) differs from assumed (%d)", actual, PAGE_SIZE);
+        DAM_LOG_ERROR("System page size (%ld) differs from assumed (%d)", actual, PAGE_SIZE);
         return 0;
     }
     return 1;
 }
 pool_header_t* dam_pool_from_ptr(void* address) {
-    pool_header_t* p = pool_list_head;
+    pool_header_t* p = dam_pool_list;
 
     while (p) {
         if (address >= p->memory && (char*)address < (char*)p->memory + p->size) {
