@@ -40,7 +40,9 @@ void dam_small_init(void) {
 
 static pool_header_t* create_small_pool(uint8_t class_index) {
     // create_small_pool() guarantees free_list != NULL on success
-    size_t pool_size = align_up(size_classes[class_index].block_size * 1000 + sizeof(pool_header_t), ALIGNMENT);
+    size_t usable_bytes = (sizeof(size_class_block_t) + size_classes[class_index].block_size) * SIZE_CLASS_BLOCKS_PER_POOL;
+
+    size_t pool_size = align_up( sizeof(pool_header_t) + usable_bytes, ALIGNMENT);
 
     DAM_LOG("[POOL] Creating pool #%zu of %zu bytes...\n", sizeof(size_classes->pools), pool_size);
 
