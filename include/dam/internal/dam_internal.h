@@ -5,6 +5,12 @@
 /*******************
  * Data Structures *
  *******************/
+typedef enum {
+    DAM_POOL_SMALL,
+    DAM_POOL_GENERAL,
+    DAM_POOL_DIRECT,
+} dam_pool_type_t;
+
 typedef struct block_header {
     size_t size;
     size_t user_size;
@@ -14,19 +20,13 @@ typedef struct block_header {
     uint8_t is_free;
 } block_header_t;
 
-typedef struct block_small_header {
+typedef struct size_class_block {
     uint32_t magic;
     uint8_t size_class_index;
     uint8_t is_free;
     uint16_t padding;
-    struct block_header* next;
-} block_small_header_t;
-
-typedef enum {
-    DAM_POOL_SMALL,
-    DAM_POOL_GENERAL,
-    DAM_POOL_DIRECT,
-} dam_pool_type_t;
+    struct size_class_block* next;
+} size_class_block_t;
 
 typedef struct pool_header {
     void* memory;
@@ -35,6 +35,12 @@ typedef struct pool_header {
     struct pool_header* next;
     block_header_t* free_list_head;
 } pool_header_t;
+
+typedef struct size_class {
+    size_t block_size;
+    size_class_block_t* free_list;
+    pool_header_t* pools;
+} size_class_t;
 
 static struct {
     size_t allocations;
