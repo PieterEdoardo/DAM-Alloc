@@ -1,3 +1,5 @@
+#include <sys/mman.h>
+
 #include "dam/dam_config.h"
 #include "dam/dam_log.h"
 
@@ -15,18 +17,52 @@ void dam_small_init(void) {
     size_class_count = 0;
 
     while (block_size <= DAM_SMALL_MAX) {
+        size_class_count++;
+        block_size *= SIZE_CLASS_MULTIPLIER;
+    }
+
+    size_classes = &size_classes[size_class_count];
+
+    for (size_t j = 0; j < size_class_count; j++) {
         size_classes[size_class_count].block_size = block_size;
         size_classes[size_class_count].free_list = NULL;
         size_classes[size_class_count].pools = NULL;
-
-        size_class_count++;
-        block_size *= SIZE_CLASS_MULTIPLIER;
     }
 
     DAM_LOG("[INIT] Small allocator initialized (%zu classes)\n", size_class_count);
 }
 
-static pool_header_t* create_small_pool(uint8_t class_index) {}
+static pool_header_t* create_small_pool(uint8_t class_index) {
+    // create_small_pool() guarantees free_list != NULL on success
+    size_t pool_size = align_up(size_classes[class_index].block_size * 1000, ALIGNMENT);
+
+    DAM_LOG("[POOL] Creating pool #%zu of %zu bytes...\n", sizeof(size_classes->pools), pool_size);
+
+    void* memory = mmap(
+            NULL,
+            pool_size,
+            PROT_READ | PROT_WRITE,
+            MAP_PRIVATE | MAP_ANONYMOUS,
+            -1,
+            0
+        );
+
+    if (memory == MAP_FAILED) {
+        DAM_LOG_ERR("mmap failed for new pool");
+        return NULL;
+    }
+
+    pool_header_t* new_pool = memory;
+    new_pool->memory = memory;
+    new_pool->size = pool_size;
+    new_pool->type = DAM_POOL_SMALL;
+    new_pool->next = pool_list_head;
+    new_pool->free_list_head = (block_header_t*)((char*)memory + POOL_SMALL_SIZE);
+
+    stats.pools_created++;
+    DAM_LOG("[POOL] Created at %p with %zu bytes usable. Total pools: %zu\n", memory, new_pool->free_list_head->size, stats.pools_created);
+    return new_pool;
+}
 
 uint8_t size_to_class(size_t size) {
     for (uint8_t i = 0; i < size_class_count; i++) {

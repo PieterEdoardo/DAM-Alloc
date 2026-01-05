@@ -63,7 +63,7 @@ pool_header_t* create_general_pool(size_t min_size);
 block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_pool);
 void split_block_if_possible(block_header_t* block_header, size_t actual_size);
 void coalesce_if_possible(block_header_t* block_header, pool_header_t* pool_header_t);
-size_t align_up(size_t size);
+size_t align_up(size_t size, size_t alignment);
 int verify_page_size(void);
 pool_header_t* dam_pool_from_ptr(void* address);
 

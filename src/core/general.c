@@ -19,9 +19,9 @@ void  dam_general_init() {
 
 void* dam_general_malloc(size_t size) {
 
-    size_t aligned_size = align_up(size);
+    size_t aligned_size = align_up(size, ALIGNMENT);
     size_t actual_size = aligned_size + sizeof(uint32_t);
-    actual_size = align_up(actual_size);
+    actual_size = align_up(actual_size, ALIGNMENT);
 
     pool_header_t* found_pool = NULL;
     block_header_t* found_block = NULL;
@@ -112,7 +112,7 @@ void dam_general_free(void* ptr, pool_header_t* pool_header) {
 
 void* dam_general_realloc(void* ptr, size_t size) {
     block_header_t* header = (block_header_t*)((char*)ptr - HEAD_SIZE);
-    size_t new_actual_size = align_up(align_up(size) + sizeof(uint32_t));
+    size_t new_actual_size = align_up(size + sizeof(uint32_t), ALIGNMENT);
     // Case 1 Shrink in place
     if (header->size >= new_actual_size) {
         header->user_size = size;

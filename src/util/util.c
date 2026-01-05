@@ -9,8 +9,8 @@ typedef struct pool_header pool_header_t;
  * Helper Functions *
  *********************/
 
-size_t align_up(size_t size) {
-    return (size + ALIGNMENT - 1) & ~(ALIGNMENT - 1);
+size_t align_up(size_t size, size_t alignment) {
+    return (size + alignment - 1) & ~(alignment - 1);
 }
 
 int verify_page_size(void) {
