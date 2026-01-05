@@ -37,19 +37,19 @@ pool_header_t* dam_pool_from_ptr(void* address) {
 
 
 void print_allocator_stats(void) {
-    DAM_LOG("\n=== Allocator Statistics ===\n");
-    DAM_LOG("Total allocations: %zu\n", stats.allocations);
-    DAM_LOG("Total frees: %zu\n", stats.frees);
-    DAM_LOG("Total splits: %zu\n", stats.splits);
-    DAM_LOG("Total coalesces: %zu\n", stats.coalesces);
-    DAM_LOG("Pools created: %zu\n", stats.pools_created);
+    DAM_LOG("\n=== Allocator Statistics ===");
+    DAM_LOG("Total allocations: %zu", stats.allocations);
+    DAM_LOG("Total frees: %zu", stats.frees);
+    DAM_LOG("Total splits: %zu", stats.splits);
+    DAM_LOG("Total coalesces: %zu", stats.coalesces);
+    DAM_LOG("Pools created: %zu", stats.pools_created);
 
     if (stats.allocations > 0) {
-        DAM_LOG("Avg blocks searched per allocation: %.2f\n",
+        DAM_LOG("Avg blocks searched per allocation: %.2f",
                (float)stats.blocks_searched / stats.allocations);
     }
 
-    DAM_LOG("============================\n\n");
+    DAM_LOG("============================\n");
 }
 
 void reset_allocator_stats(void) {

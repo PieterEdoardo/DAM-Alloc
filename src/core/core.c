@@ -19,14 +19,14 @@ void init_allocator(void) {
     }
 
     dam_small_init();
-    DAM_LOG("[INIT] Initializing size class allocator...\n");
+    DAM_LOG("[INIT] Initializing size class allocator...");
     dam_general_init();
-    DAM_LOG("[INIT] Initializing growing pool allocator...\n");
+    DAM_LOG("[INIT] Initializing growing pool allocator...");
     dam_direct_init();
-    DAM_LOG("[INIT] Initializing direct mmap() allocator...\n");
+    DAM_LOG("[INIT] Initializing direct mmap() allocator...");
 
     initialized = 1;
-    DAM_LOG("[INIT] Allocator initialized\n");
+    DAM_LOG("[INIT] Allocator initialized");
 }
 
 void* dam_malloc(size_t size) {

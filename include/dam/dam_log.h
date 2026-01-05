@@ -11,7 +11,7 @@
     fprintf(stderr, "[DAM] " fmt "\n", ##__VA_ARGS__)
 
 #define DAM_LOG_ERR(fmt, ...) \
-    fprintf(stderr, "[DAM][ERR] " fmt "\n", ##__VA_ARGS__)
+    fprintf(stderr, "[DAM][ERROR] " fmt "\n", ##__VA_ARGS__)
 
 #else
 

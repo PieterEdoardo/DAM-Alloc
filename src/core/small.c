@@ -21,11 +21,14 @@ void dam_small_init(void) {
         block_size *= SIZE_CLASS_MULTIPLIER;
     }
 
-    size_classes = mmap(NULL,
-    size_class_count * sizeof(size_class_t),
-    PROT_READ | PROT_WRITE,
-    MAP_PRIVATE | MAP_ANONYMOUS,
-    -1, 0);
+    size_classes = mmap(
+        NULL,
+        size_class_count * sizeof(size_class_t),
+        PROT_READ | PROT_WRITE,
+        MAP_PRIVATE | MAP_ANONYMOUS,
+        -1,
+        0
+    );
 
     block_size = DAM_SMALL_MIN;
     for (size_t j = 0; j < size_class_count; j++) {
@@ -39,21 +42,19 @@ void dam_small_init(void) {
 }
 
 static pool_header_t* create_small_pool(uint8_t class_index) {
-    // create_small_pool() guarantees free_list != NULL on success
     size_t usable_bytes = (sizeof(size_class_block_t) + size_classes[class_index].block_size) * SIZE_CLASS_BLOCKS_PER_POOL;
-
     size_t pool_size = align_up( sizeof(pool_header_t) + usable_bytes, ALIGNMENT);
 
-    DAM_LOG("[POOL] Creating pool #%zu of %zu bytes...\n", sizeof(size_classes->pools), pool_size);
+    DAM_LOG("[POOL] Creating size class pool for class %zuB with total size of %zuB...", size_classes[class_index].block_size, pool_size);
 
     void* memory = mmap(
-            NULL,
-            pool_size,
-            PROT_READ | PROT_WRITE,
-            MAP_PRIVATE | MAP_ANONYMOUS,
-            -1,
-            0
-        );
+        NULL,
+        pool_size,
+        PROT_READ | PROT_WRITE,
+        MAP_PRIVATE | MAP_ANONYMOUS,
+        -1,
+        0
+    );
 
     if (memory == MAP_FAILED) {
         DAM_LOG_ERR("mmap failed for new pool");
@@ -65,11 +66,32 @@ static pool_header_t* create_small_pool(uint8_t class_index) {
     new_pool->size = pool_size;
     new_pool->type = DAM_POOL_SMALL;
     new_pool->next = size_classes[class_index].pools;
-    new_pool->free_list_head = (block_header_t*)((char*)memory + POOL_SMALL_SIZE);
     size_classes[class_index].pools = new_pool;
 
+    size_t block_stride = sizeof(size_class_block_t) + size_classes[class_index].block_size;
+    char* cursor = (char*)memory + sizeof(pool_header_t);
+    char* pool_end = (char*)memory + pool_size;
+
+    size_class_block_t* first_block = NULL;
+
+    for (size_t i = 0; i < SIZE_CLASS_BLOCKS_PER_POOL; i++) {
+        if (cursor + block_stride > pool_end) {
+            break;
+        }
+
+        size_class_block_t* block = (size_class_block_t*)cursor;
+
+        block->magic = FREED_MAGIC;
+        block->is_free = 1;
+        block->size_class_index = class_index;
+        block->next = first_block;
+        first_block = block;
+
+        cursor += block_stride;
+    }
+
     stats.pools_created++;
-    DAM_LOG("[POOL] Created at %p with %zu bytes usable. Total pools: %zu\n", memory, new_pool->free_list_head->size, stats.pools_created);
+    DAM_LOG("[POOL] Created at %p with %zu bytes usable. Total pools: %zu", memory, new_pool->free_list_head->size, stats.pools_created);
     return new_pool;
 }
 
