@@ -69,38 +69,36 @@ void dam_general_free(void* ptr, pool_header_t* pool_header) {
 
     block_header_t* header = (block_header_t*)((char*)ptr - HEAD_SIZE);
 
-
     // Double free checks
     if (header->magic == FREED_MAGIC) {
-        DAM_LOG_ERR("Double free detected at %p!", ptr);
+        DAM_LOG_ERR("[FREE] Double free detected at %p!", ptr);
         return;
     }
 
     // Alignment check
     if ((uintptr_t)ptr % ALIGNMENT != 0) {
-        DAM_LOG_ERR("Invalid pointer passed to dam_free: %p", ptr);
+        DAM_LOG_ERR("[FREE] Invalid pointer passed to dam_free: %p", ptr);
         return;
     }
 
     // Invalid pointer checks
     if (header->magic != BLOCK_MAGIC) {
-        DAM_LOG_ERR("Invalid pointer passed to dam_free: %p", ptr);
+        DAM_LOG_ERR("[FREE] Invalid pointer passed to dam_free: %p", ptr);
         return;
     }
 
     // Header sanity check
     if (header->size == 0) {
-        DAM_LOG_ERR("Pointer passed to dam_free refers to header with invalid size: %p", ptr);
-
+        DAM_LOG_ERR("[FREE] Pointer passed to dam_free refers to header with invalid size: %p", ptr);
         return;
     }
 
     unsigned int* end_canary = (unsigned int*)((char*)ptr + header->user_size);
     if (*end_canary != CANARY_VALUE) {
-        DAM_LOG_ERR("Buffer overflow detected at %p! Canary was 0x%X, expected 0x%X",ptr, *end_canary, CANARY_VALUE);
+        DAM_LOG_ERR("[CANARY][FREE] Buffer overflow detected at %p! Canary was 0x%X, expected 0x%X",ptr, *end_canary, CANARY_VALUE);
         // Continue to free, but user knows there was corruption.
     } else {
-        DAM_LOG("[CANARY] Buffer overflow check passed");
+        DAM_LOG("[CANARY][FREE] Buffer overflow check passed");
     }
 
     header->magic = FREED_MAGIC;
@@ -108,6 +106,7 @@ void dam_general_free(void* ptr, pool_header_t* pool_header) {
 
     coalesce_if_possible(header, pool_header);
     stats.frees++;
+    DAM_LOG("[FREE] Pointer %p freed", ptr);
 }
 
 void* dam_general_realloc(void* ptr, size_t size) {

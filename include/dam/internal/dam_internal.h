@@ -20,13 +20,13 @@ typedef struct block_header {
     uint8_t is_free;
 } block_header_t;
 
-typedef struct size_class_block {
+typedef struct size_class_header {
     uint32_t magic;
     uint8_t size_class_index;
     uint8_t is_free;
     uint16_t padding;
-    struct size_class_block* next;
-} size_class_block_t;
+    struct size_class_header* next;
+} size_class_header_t;
 
 typedef struct pool_header {
     void* memory;
@@ -38,7 +38,7 @@ typedef struct pool_header {
 
 typedef struct size_class {
     size_t block_size;
-    size_class_block_t* free_list;
+    size_class_header_t* free_list;
     pool_header_t* pools;
 } size_class_t;
 
