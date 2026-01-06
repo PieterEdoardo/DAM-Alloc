@@ -67,6 +67,8 @@ void coalesce_if_possible(block_header_t* block_header, pool_header_t* pool_head
 size_t align_up(size_t size, size_t alignment);
 int verify_page_size(void);
 pool_header_t* dam_pool_from_ptr(void* address);
+size_class_header_t* get_size_class_header(void* ptr);
+block_header_t* get_block_header(void* ptr);
 
 
 /* allocator entry points */

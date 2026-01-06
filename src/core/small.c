@@ -1,5 +1,7 @@
+#include <string.h>
 #include <sys/mman.h>
 
+#include "dam/dam.h"
 #include "dam/dam_config.h"
 #include "dam/dam_log.h"
 
@@ -120,6 +122,10 @@ uint8_t size_to_class(size_t size) {
     return size_class_count - 1;
 }
 
+void* small_alloc_class(size_class_t*) {
+
+}
+
 void* dam_small_malloc(size_t size) {
     uint8_t class = size_to_class(size);
     size_class_t* size_class = &size_classes[class];
@@ -142,6 +148,38 @@ void* dam_small_malloc(size_t size) {
 
     DAM_LOG("[ALLOC] Returning pointer %p", ptr);
     return ptr;
+}
+
+void* dam_small_realloc(void* ptr, size_t size) {
+    size_class_header_t* header = get_size_class_header(ptr);
+    // size_class_t* size_class = &size_classes[header->size_class_index];
+    uint8_t requested_index = size_to_class(size);
+    uint8_t current_index = header->size_class_index;
+
+    //case A requested class aligns to same as current
+    if (requested_index <= current_index) {
+        return ptr;
+    }
+
+    //case B/C must move
+    void * new_ptr;
+    if (size <= DAM_SMALL_MAX) {
+        new_ptr = dam_small_malloc(size);
+    } else {
+        new_ptr = dam_malloc(size); // Grow outside size classes?
+    }
+    if (!new_ptr) {
+        return NULL;
+    }
+
+    size_t copy_size = size_classes[current_index].block_size;
+    if (copy_size > size) {
+        copy_size = size;
+    }
+    memcpy(new_ptr, ptr, copy_size);
+    dam_small_free(ptr);
+
+    return new_ptr;
 }
 
 void dam_small_free(void* ptr) {
@@ -169,3 +207,6 @@ void dam_small_free(void* ptr) {
     DAM_LOG("[FREE] Pointer %p freed", ptr);
 }
 
+size_class_header_t* get_size_class_header(void* ptr) {
+    return (size_class_header_t*)ptr - 1;
+}

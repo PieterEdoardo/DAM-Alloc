@@ -77,13 +77,11 @@ void* dam_realloc(void* ptr, size_t size) {
     }
 
     if (size <= DAM_SMALL_MAX) {
-        // dam_small_realloc(ptr, size);
-        DAM_LOG_ERROR("SMALL_MALLOC NOT IMPLEMENTED");
+        return dam_small_realloc(ptr, size);
     } else if (size <= DAM_GENERAL_MAX) {
         return dam_general_realloc(ptr, size);
-        DAM_LOG_ERROR("NOT IMPLEMENTED");
     } else {
-        // dam_direct_realloc(ptr, size);
+        // return dam_direct_realloc(ptr, size);
         DAM_LOG_ERROR("DIRECT_MALLOC NOT IMPLEMENTED");
     }
     return NULL;
