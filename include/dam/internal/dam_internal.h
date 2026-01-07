@@ -5,6 +5,12 @@
 /*******************
  * Data Structures *
  *******************/
+typedef enum {
+    DAM_POOL_SMALL,
+    DAM_POOL_GENERAL,
+    DAM_POOL_DIRECT,
+} dam_pool_type_t;
+
 typedef struct block_header {
     size_t size;
     size_t user_size;
@@ -14,27 +20,27 @@ typedef struct block_header {
     uint8_t is_free;
 } block_header_t;
 
-typedef struct block_small_header {
+typedef struct size_class_header {
     uint32_t magic;
     uint8_t size_class_index;
     uint8_t is_free;
     uint16_t padding;
-    struct block_header* next;
-} block_small_header_t;
-
-typedef enum {
-    DAM_POOL_SMALL,
-    DAM_POOL_GENERAL,
-    DAM_POOL_DIRECT,
-} dam_pool_type_t;
+    struct size_class_header* next;
+} size_class_header_t;
 
 typedef struct pool_header {
     void* memory;
     size_t size;
     dam_pool_type_t type;
     struct pool_header* next;
-    block_header_t* free_list_head;
+    block_header_t* free_block_list;
 } pool_header_t;
+
+typedef struct size_class {
+    size_t block_size;
+    size_class_header_t* free_class_list;
+    pool_header_t* pools;
+} size_class_t;
 
 static struct {
     size_t allocations;
@@ -48,16 +54,17 @@ static struct {
 typedef struct block_header block_header_t;
 typedef struct pool_header pool_header_t;
 
-extern pool_header_t* pool_list_head;
+extern pool_header_t* dam_pool_list;
 extern int initialized;
 
 /* helpers */
 void init_allocator(void);
+void dam_register_pool(pool_header_t* new_pool_header);
 pool_header_t* create_general_pool(size_t min_size);
 block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_pool);
 void split_block_if_possible(block_header_t* block_header, size_t actual_size);
 void coalesce_if_possible(block_header_t* block_header, pool_header_t* pool_header_t);
-size_t align_up(size_t size);
+size_t align_up(size_t size, size_t alignment);
 int verify_page_size(void);
 pool_header_t* dam_pool_from_ptr(void* address);
 

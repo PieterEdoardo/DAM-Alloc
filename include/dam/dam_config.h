@@ -13,6 +13,10 @@
 #define DAM_DEBUG 1
 #endif
 
+#ifndef DAM_DEBUG_ERROR
+#define DAM_DEBUG_ERROR 1
+#endif
+
 #ifndef DAM_ENABLE_STATS
 #define DAM_ENABLE_STATS 1
 #endif
@@ -39,17 +43,16 @@
 
 // Headers
 #define HEAD_SIZE ALIGN_UP_CONST(sizeof(block_header_t), ALIGNMENT)
-#define HEAD_SMALL_SIZE ALIGN_UP_CONST(sizeof(block_small_header_t), ALIGNMENT)
-#define HEAD_GENERAL_SIZE ALIGN_UP_CONST(sizeof(block_general_header_t), ALIGNMENT)
-#define HEAD_DIRECT_SIZE ALIGN_UP_CONST(sizeof(block_direct_header_t), ALIGNMENT)
+#define SIZE_CLASS_HEADER_SIZE align_up(sizeof(size_class_header_t), ALIGNMENT)
 
 // Blocks minimum
 #define DAM_MIN_BLOCK (ALIGNMENT + MIN_BLOCK_SIZE)
 #define BLOCK_SMALL_MIN (HEAD_SMALL_SIZE + ALIGNMENT)
 #define SIZE_CLASS_MULTIPLIER 2
+#define SIZE_CLASS_BLOCKS_PER_POOL 1000
 #define MIN_BLOCK_SIZE ALIGN_UP_CONST(HEAD_SIZE + (ALIGNMENT * 2), ALIGNMENT)
 
-#define POOL_HEADER_SIZE ALIGN_UP_CONST(sizeof(pool_header_t), ALIGNMENT)
+
 #define POOL_SMALL_SIZE ALIGN_UP_CONST(sizeof(pool_header_t), PAGE_SIZE)
 #define POOL_GENERAL_SIZE ALIGN_UP_CONST(sizeof(pool_header_t), PAGE_SIZE)
 /******************
@@ -73,6 +76,6 @@ _Static_assert(INITIAL_POOL_SIZE % PAGE_SIZE == 0, "Pool size must be a multiple
 _Static_assert((DAM_SMALL_MIN & DAM_SMALL_MIN - 1) == 0, "DAM_SMALL_MIN must be power of two");
 _Static_assert((DAM_SMALL_MAX & DAM_SMALL_MAX - 1) == 0, "DAM_SMALL_MAX must be power of two");
 _Static_assert(DAM_SMALL_MIN <= DAM_SMALL_MAX, "Invalid size class range");
-_Static_assert(DAM_SMALL_MAX <= DAM_GENERAL_MAX, "Invalid allocator bounderies");
+_Static_assert(DAM_SMALL_MAX <= DAM_GENERAL_MAX, "Invalid allocator boundaries");
 
 #endif /* DAM_CONFIG_H */

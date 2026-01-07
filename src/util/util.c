@@ -9,8 +9,8 @@ typedef struct pool_header pool_header_t;
  * Helper Functions *
  *********************/
 
-size_t align_up(size_t size) {
-    return (size + ALIGNMENT - 1) & ~(ALIGNMENT - 1);
+size_t align_up(size_t size, size_t alignment) {
+    return (size + alignment - 1) & ~(alignment - 1);
 }
 
 int verify_page_size(void) {
@@ -18,13 +18,13 @@ int verify_page_size(void) {
     assert(actual > 0);
 
     if ((size_t)actual != PAGE_SIZE) {
-        DAM_LOG_ERR("System page size (%ld) differs from assumed (%d)", actual, PAGE_SIZE);
+        DAM_LOG_ERROR("System page size (%ld) differs from assumed (%d)", actual, PAGE_SIZE);
         return 0;
     }
     return 1;
 }
 pool_header_t* dam_pool_from_ptr(void* address) {
-    pool_header_t* p = pool_list_head;
+    pool_header_t* p = dam_pool_list;
 
     while (p) {
         if (address >= p->memory && (char*)address < (char*)p->memory + p->size) {
@@ -37,19 +37,19 @@ pool_header_t* dam_pool_from_ptr(void* address) {
 
 
 void print_allocator_stats(void) {
-    DAM_LOG("\n=== Allocator Statistics ===\n");
-    DAM_LOG("Total allocations: %zu\n", stats.allocations);
-    DAM_LOG("Total frees: %zu\n", stats.frees);
-    DAM_LOG("Total splits: %zu\n", stats.splits);
-    DAM_LOG("Total coalesces: %zu\n", stats.coalesces);
-    DAM_LOG("Pools created: %zu\n", stats.pools_created);
+    DAM_LOG("\n=== Allocator Statistics ===");
+    DAM_LOG("Total allocations: %zu", stats.allocations);
+    DAM_LOG("Total frees: %zu", stats.frees);
+    DAM_LOG("Total splits: %zu", stats.splits);
+    DAM_LOG("Total coalesces: %zu", stats.coalesces);
+    DAM_LOG("Pools created: %zu", stats.pools_created);
 
     if (stats.allocations > 0) {
-        DAM_LOG("Avg blocks searched per allocation: %.2f\n",
+        DAM_LOG("Avg blocks searched per allocation: %.2f",
                (float)stats.blocks_searched / stats.allocations);
     }
 
-    DAM_LOG("============================\n\n");
+    DAM_LOG("============================\n");
 }
 
 void reset_allocator_stats(void) {
