@@ -7,8 +7,9 @@ It implements **three allocation layers**, each optimized for a specific size ra
 ---
 
 ## Architecture Overview
-
+```
 dam_malloc()
+
 ├── Small allocator (size classes)
 │ └── Fixed-size blocks (32B → 256B)
 │
@@ -16,8 +17,8 @@ dam_malloc()
 │ └── Variable-size blocks with splitting & coalescing
 │
 └── Direct allocator (mmap)
-└── One allocation per mapping (large objects)
-
+  └── One allocation per mapping (large objects)
+```
 
 ---
 
