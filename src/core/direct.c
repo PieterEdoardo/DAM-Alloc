@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 
@@ -36,24 +37,29 @@ void* dam_direct_malloc(size_t size) {
 
     return block_header + 1;
 }
+
 void* dam_direct_realloc(void* ptr, size_t size) {
-    size_t total_size = align_up(sizeof(pool_header_t) +sizeof(block_header_t) + size, PAGE_SIZE);
+    block_header_t* block_header = direct_block_from_ptr(ptr);
+    size_t old_size = block_header->size;
 
 
-    // Case A Shrink to lower layer
+    // Case 1 Shrink to lower layer
+    void* new_ptr;
     if (size <= DAM_GENERAL_MAX) {
-        void* new_ptr = dam_malloc(size);
+        new_ptr = dam_malloc(size);
 
-        memcpy(new_ptr, ptr, size);
+        memcpy(new_ptr, ptr, old_size < size ? old_size : size);
         dam_direct_free(ptr);
 
         return new_ptr;
     }
 
-    // Case B still direct
-    if (size / block_header->size <= DAM_DIRECT_SHRINK_RATIO || block_header->size < size) {
+    // Case 2/3 stay inside direct
+    if (size *  100 <= old_size * DAM_DIRECT_SHRINK_PERCENT || size > block_header->size) {
+        new_ptr = dam_direct_malloc(size);
+        if (!new_ptr) return NULL;
 
-        memcpy(new_ptr, ptr, min(block_header->size, size));
+        memcpy(new_ptr, ptr, old_size < size ? old_size : size);
         dam_direct_free(ptr);
 
         return new_ptr;
@@ -64,8 +70,18 @@ void* dam_direct_realloc(void* ptr, size_t size) {
 
 
 void  dam_direct_free(void* ptr) {
+    if (!ptr) return;
+
     pool_header_t* pool_header = dam_pool_from_ptr(ptr);
 
     dam_unregister_pool(pool_header);
-    munmap(ptr, pool_header->size);
+    munmap(pool_header, pool_header->size);
+}
+
+pool_header_t* direct_pool_from_ptr(void* ptr) {
+    return (pool_header_t*)((char*)ptr - sizeof(block_header_t) - sizeof(pool_header_t));
+}
+
+block_header_t* direct_block_from_ptr(void* ptr) {
+    return (block_header_t*)((char*)ptr - sizeof(block_header_t));
 }

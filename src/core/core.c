@@ -43,13 +43,6 @@ void init_allocator(void) {
     DAM_LOG("[INIT] Allocator initialized");
 }
 
-void dam_register_pool(pool_header_t* new_pool_header) {
-    new_pool_header->next = dam_pool_list;
-    dam_pool_list = new_pool_header;
-}
-
-void dam_unregister_pool(pool_header_t* new_pool_header) {}
-
 void* dam_malloc(size_t size) {
     if (!initialized) init_allocator();
     if (size == 0) return NULL;
@@ -68,11 +61,7 @@ void* dam_malloc(size_t size) {
 }
 
 void* dam_realloc(void* ptr, size_t size) {
-    if (!initialized) init_allocator();
-
-    if (ptr == NULL) {
-        return dam_malloc(size);
-    }
+    if (!ptr) return dam_malloc(size);
 
     if (size == 0) {
         dam_free(ptr);
@@ -88,14 +77,14 @@ void* dam_realloc(void* ptr, size_t size) {
 
     switch (pool->type) {
         case DAM_POOL_SMALL:
-            dam_small_realloc(ptr, size);
-            break;
+            return dam_small_realloc(ptr, size);
+
         case DAM_POOL_GENERAL:
-            dam_general_realloc(ptr, size);
-            break;
+            return dam_general_realloc(ptr, size);
+
         case DAM_POOL_DIRECT:
-            dam_direct_realloc(ptr, size);
-            break;
+            return dam_direct_realloc(ptr, size);
+
         default:
             DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
             return NULL;

@@ -60,7 +60,7 @@ extern int initialized;
 /* helpers */
 void init_allocator(void);
 void dam_register_pool(pool_header_t* new_pool_header);
-void dam_unregister_pool(pool_header_t* new_pool_header);
+void dam_unregister_pool(pool_header_t* pool_header);
 pool_header_t* create_general_pool(size_t min_size);
 block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_pool);
 void split_block_if_possible(block_header_t* block_header, size_t actual_size);
@@ -70,6 +70,8 @@ int verify_page_size(void);
 pool_header_t* dam_pool_from_ptr(void* address);
 size_class_header_t* get_size_class_header(void* ptr);
 block_header_t* get_block_header(void* ptr);
+pool_header_t* direct_pool_from_ptr(void* ptr);
+block_header_t* direct_block_from_ptr(void* ptr);
 
 
 /* allocator entry points */

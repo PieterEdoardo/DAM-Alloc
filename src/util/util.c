@@ -23,6 +23,24 @@ int verify_page_size(void) {
     }
     return 1;
 }
+
+void dam_register_pool(pool_header_t* new_pool_header) {
+    new_pool_header->next = dam_pool_list;
+    dam_pool_list = new_pool_header;
+}
+
+void dam_unregister_pool(pool_header_t* pool_header) {
+    pool_header_t** current = &dam_pool_list;
+
+    while (*current) {
+        if (*current == pool_header) {
+            *current = pool_header->next;
+            return;
+        }
+        current = &(*current)->next;
+    }
+}
+
 pool_header_t* dam_pool_from_ptr(void* address) {
     pool_header_t* p = dam_pool_list;
 

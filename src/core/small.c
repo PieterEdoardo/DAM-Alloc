@@ -159,33 +159,28 @@ void* dam_small_realloc(void* ptr, size_t size) {
     // Stays within small
     void * new_ptr;
     if (size <= DAM_SMALL_MAX) {
-
         //case A requested class aligns to same as current
         uint8_t requested_index = size_to_class(size);
         if (requested_index <= current_index) {
             return ptr;
         }
 
-        //@TODO YOU LEFT OF HERE FIXING THE LOGIC. EVERTYING UNDER HERE DOESN"T WORK.
-        //case B must move
         new_ptr = dam_small_malloc(size);
-        memcpy(new_ptr, ptr, size);
-        free(ptr);
-    } else {
-        new_ptr = dam_malloc(size); // Grow outside size classes?
-        memcpy(new_ptr, ptr, size);
-        free(ptr);
-    }
-    if (!new_ptr) {
-        return NULL;
+        if (!new_ptr) return NULL;
+
+        size_t copy_size = size_classes[current_index].block_size;
+        memcpy(new_ptr, ptr, copy_size);
+        dam_small_free(ptr);
+        return new_ptr;
     }
 
+    // case 2: Grows beyond small
+    new_ptr = dam_malloc(size);
+    if (!new_ptr) return NULL;
+
     size_t copy_size = size_classes[current_index].block_size;
-    if (copy_size > size) {
-        copy_size = size;
-    }
     memcpy(new_ptr, ptr, copy_size);
-    dam_small_free(ptr);
+    dam_free(ptr);
 
     return new_ptr;
 }
