@@ -21,6 +21,7 @@
  *  - routing free() / realloc()
  **********************************************************/
 
+// Invariant: The pool header must be the single source of truth for ownership.
 pool_header_t* dam_pool_list = NULL;
 int initialized = 0;
 
@@ -42,11 +43,6 @@ void init_allocator(void) {
     DAM_LOG("[INIT] Allocator initialized");
 }
 
-void dam_register_pool(pool_header_t* new_pool_header) {
-    new_pool_header->next = dam_pool_list;
-    dam_pool_list = new_pool_header;
-}
-
 void* dam_malloc(size_t size) {
     if (!initialized) init_allocator();
     if (size == 0) return NULL;
@@ -65,28 +61,34 @@ void* dam_malloc(size_t size) {
 }
 
 void* dam_realloc(void* ptr, size_t size) {
-    if (!initialized) init_allocator();
-
-    if (ptr == NULL) {
-        return dam_malloc(size);
-    }
+    if (!ptr) return dam_malloc(size);
 
     if (size == 0) {
         dam_free(ptr);
         return NULL;
     }
 
-    if (size <= DAM_SMALL_MAX) {
-        // dam_small_realloc(ptr, size);
-        DAM_LOG_ERROR("SMALL_MALLOC NOT IMPLEMENTED");
-    } else if (size <= DAM_GENERAL_MAX) {
-        return dam_general_realloc(ptr, size);
-        DAM_LOG_ERROR("NOT IMPLEMENTED");
-    } else {
-        // dam_direct_realloc(ptr, size);
-        DAM_LOG_ERROR("DIRECT_MALLOC NOT IMPLEMENTED");
+    pool_header_t* pool = dam_pool_from_ptr(ptr);
+
+    if (!pool) {
+        DAM_LOG_ERROR("[REALLOC] Pointer does not belong to DAM: %p", ptr);
+        return NULL;
     }
-    return NULL;
+
+    switch (pool->type) {
+        case DAM_POOL_SMALL:
+            return dam_small_realloc(ptr, size);
+
+        case DAM_POOL_GENERAL:
+            return dam_general_realloc(ptr, size);
+
+        case DAM_POOL_DIRECT:
+            return dam_direct_realloc(ptr, size);
+
+        default:
+            DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
+            return NULL;
+    }
 }
 
 void dam_free(void* ptr) {

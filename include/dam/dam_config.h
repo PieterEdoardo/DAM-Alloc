@@ -33,6 +33,7 @@
 #define DAM_GENERAL_MAX KiB(64)
 #define MAX_POOLS 10
 #define INITIAL_POOL_SIZE MiB(1)
+#define DAM_DIRECT_SHRINK_PERCENT 80
 
 /********************
  * Size & alignment *
@@ -42,15 +43,13 @@
 #define PAGE_SIZE 4096 // Assumed number
 
 // Headers
-#define HEAD_SIZE ALIGN_UP_CONST(sizeof(block_header_t), ALIGNMENT)
+#define BLOCK_HEADER_SIZE ALIGN_UP_CONST(sizeof(block_header_t), ALIGNMENT)
 #define SIZE_CLASS_HEADER_SIZE align_up(sizeof(size_class_header_t), ALIGNMENT)
 
-// Blocks minimum
-#define DAM_MIN_BLOCK (ALIGNMENT + MIN_BLOCK_SIZE)
-#define BLOCK_SMALL_MIN (HEAD_SMALL_SIZE + ALIGNMENT)
+// Size classes
 #define SIZE_CLASS_MULTIPLIER 2
 #define SIZE_CLASS_BLOCKS_PER_POOL 1000
-#define MIN_BLOCK_SIZE ALIGN_UP_CONST(HEAD_SIZE + (ALIGNMENT * 2), ALIGNMENT)
+#define MIN_BLOCK_SIZE ALIGN_UP_CONST(BLOCK_HEADER_SIZE + DAM_SMALL_MAX, ALIGNMENT)
 
 
 #define POOL_SMALL_SIZE ALIGN_UP_CONST(sizeof(pool_header_t), PAGE_SIZE)
@@ -69,7 +68,7 @@
  * Platform invariants
  * ================================ */
 _Static_assert(ALIGNMENT >= _Alignof(max_align_t), "ALIGNMENT must match platform max alignment");
-_Static_assert(HEAD_SIZE % ALIGNMENT == 0, "HEAD_SIZE must preserve payload alignment");
+_Static_assert(BLOCK_HEADER_SIZE % ALIGNMENT == 0, "HEAD_SIZE must preserve payload alignment");
 _Static_assert(POOL_GENERAL_SIZE % ALIGNMENT == 0, "Pool header must preserve block alignment");
 _Static_assert(INITIAL_POOL_SIZE >= POOL_GENERAL_SIZE + MIN_BLOCK_SIZE, "Initial pool size is too small");
 _Static_assert(INITIAL_POOL_SIZE % PAGE_SIZE == 0, "Pool size must be a multiple of PAGE_SIZE");
