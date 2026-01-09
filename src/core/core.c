@@ -48,6 +48,8 @@ void dam_register_pool(pool_header_t* new_pool_header) {
     dam_pool_list = new_pool_header;
 }
 
+void dam_unregister_pool(pool_header_t* new_pool_header) {}
+
 void* dam_malloc(size_t size) {
     if (!initialized) init_allocator();
     if (size == 0) return NULL;
@@ -77,15 +79,27 @@ void* dam_realloc(void* ptr, size_t size) {
         return NULL;
     }
 
-    if (size <= DAM_SMALL_MAX) {
-        return dam_small_realloc(ptr, size);
-    } else if (size <= DAM_GENERAL_MAX) {
-        return dam_general_realloc(ptr, size);
-    } else {
-        // return dam_direct_realloc(ptr, size);
-        DAM_LOG_ERROR("DIRECT_MALLOC NOT IMPLEMENTED");
+    pool_header_t* pool = dam_pool_from_ptr(ptr);
+
+    if (!pool) {
+        DAM_LOG_ERROR("[REALLOC] Pointer does not belong to DAM: %p", ptr);
+        return NULL;
     }
-    return NULL;
+
+    switch (pool->type) {
+        case DAM_POOL_SMALL:
+            dam_small_realloc(ptr, size);
+            break;
+        case DAM_POOL_GENERAL:
+            dam_general_realloc(ptr, size);
+            break;
+        case DAM_POOL_DIRECT:
+            dam_direct_realloc(ptr, size);
+            break;
+        default:
+            DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
+            return NULL;
+    }
 }
 
 void dam_free(void* ptr) {

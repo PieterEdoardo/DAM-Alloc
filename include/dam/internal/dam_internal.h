@@ -11,6 +11,14 @@ typedef enum {
     DAM_POOL_DIRECT,
 } dam_pool_type_t;
 
+typedef struct size_class_header {
+    uint32_t magic;
+    uint8_t size_class_index;
+    uint8_t is_free;
+    uint16_t padding;
+    struct size_class_header* next;
+} size_class_header_t;
+
 typedef struct block_header {
     size_t size;
     size_t user_size;
@@ -19,14 +27,6 @@ typedef struct block_header {
     uint32_t magic;
     uint8_t is_free;
 } block_header_t;
-
-typedef struct size_class_header {
-    uint32_t magic;
-    uint8_t size_class_index;
-    uint8_t is_free;
-    uint16_t padding;
-    struct size_class_header* next;
-} size_class_header_t;
 
 typedef struct pool_header {
     void* memory;
@@ -60,6 +60,7 @@ extern int initialized;
 /* helpers */
 void init_allocator(void);
 void dam_register_pool(pool_header_t* new_pool_header);
+void dam_unregister_pool(pool_header_t* new_pool_header);
 pool_header_t* create_general_pool(size_t min_size);
 block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_pool);
 void split_block_if_possible(block_header_t* block_header, size_t actual_size);

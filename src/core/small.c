@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 
@@ -153,20 +154,27 @@ void* dam_small_malloc(size_t size) {
 void* dam_small_realloc(void* ptr, size_t size) {
     size_class_header_t* header = get_size_class_header(ptr);
     // size_class_t* size_class = &size_classes[header->size_class_index];
-    uint8_t requested_index = size_to_class(size);
     uint8_t current_index = header->size_class_index;
 
-    //case A requested class aligns to same as current
-    if (requested_index <= current_index) {
-        return ptr;
-    }
-
-    //case B/C must move
+    // Stays within small
     void * new_ptr;
     if (size <= DAM_SMALL_MAX) {
+
+        //case A requested class aligns to same as current
+        uint8_t requested_index = size_to_class(size);
+        if (requested_index <= current_index) {
+            return ptr;
+        }
+
+        //@TODO YOU LEFT OF HERE FIXING THE LOGIC. EVERTYING UNDER HERE DOESN"T WORK.
+        //case B must move
         new_ptr = dam_small_malloc(size);
+        memcpy(new_ptr, ptr, size);
+        free(ptr);
     } else {
         new_ptr = dam_malloc(size); // Grow outside size classes?
+        memcpy(new_ptr, ptr, size);
+        free(ptr);
     }
     if (!new_ptr) {
         return NULL;
