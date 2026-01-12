@@ -21,7 +21,6 @@
  *  - routing free() / realloc()
  **********************************************************/
 
-// Invariant: The pool header must be the single source of truth for ownership.
 pool_header_t* dam_pool_list = NULL;
 int initialized = 0;
 
