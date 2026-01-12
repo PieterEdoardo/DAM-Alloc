@@ -46,7 +46,7 @@ void* dam_direct_realloc(void* ptr, size_t size) {
     // Case 1 Shrink to lower layer
     void* new_ptr;
     if (size <= DAM_GENERAL_MAX) {
-        new_ptr = dam_malloc(size);
+        new_ptr = dam_malloc_internal(size);
 
         memcpy(new_ptr, ptr, old_size < size ? old_size : size);
         dam_direct_free(ptr);
@@ -55,7 +55,7 @@ void* dam_direct_realloc(void* ptr, size_t size) {
     }
 
     // Case 2/3 stay inside direct
-    if (size *  100 <= old_size * DAM_DIRECT_SHRINK_PERCENT || size > block_header->size) {
+    if (size *  100 <= old_size * DAM_DIRECT_SHRINK_PERCENTAGE || size > block_header->size) {
         new_ptr = dam_direct_malloc(size);
         if (!new_ptr) return NULL;
 

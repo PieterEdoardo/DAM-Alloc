@@ -33,7 +33,7 @@
 #define DAM_GENERAL_MAX KiB(64)
 #define MAX_POOLS 10
 #define INITIAL_POOL_SIZE MiB(1)
-#define DAM_DIRECT_SHRINK_PERCENT 80
+#define DAM_DIRECT_SHRINK_PERCENTAGE 80
 
 /********************
  * Size & alignment *
