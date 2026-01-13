@@ -169,13 +169,13 @@ void* dam_general_realloc(void* ptr, size_t size) {
     }
 
     // Case 3 Grow in-place but no next block is not free, so copy and free
-    void* new_ptr = dam_malloc(size);
+    void* new_ptr = dam_malloc_internal(size);
     if (!new_ptr) return NULL;
 
     // Copy smaller of old and new sizes
     size_t copy_size = (header->user_size < size) ? header->user_size : size;
     memcpy(new_ptr, ptr, copy_size);
-    dam_free(ptr);
+    dam_free_internal(ptr);
 
     return new_ptr;
 }

@@ -1,5 +1,7 @@
 #pragma once
-#include <stddef.h>
+
+#include <stdint.h>
+
 #include "dam/internal/dam_internal.h"
 
 /*******************
@@ -57,8 +59,14 @@ typedef struct pool_header pool_header_t;
 extern pool_header_t* dam_pool_list;
 extern int initialized;
 
-/* helpers */
+// core internals
 void init_allocator(void);
+void init_allocator_unlocked(void);
+void* dam_malloc_internal(size_t size);
+void dam_free_internal(void* ptr);
+void* dam_realloc_internal(void* ptr, size_t size);
+
+/* helpers */
 void dam_register_pool(pool_header_t* new_pool_header);
 void dam_unregister_pool(pool_header_t* pool_header);
 pool_header_t* create_general_pool(size_t min_size);

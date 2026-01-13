@@ -153,7 +153,6 @@ void* dam_small_malloc(size_t size) {
 
 void* dam_small_realloc(void* ptr, size_t size) {
     size_class_header_t* header = get_size_class_header(ptr);
-    // size_class_t* size_class = &size_classes[header->size_class_index];
     uint8_t current_index = header->size_class_index;
 
     // Stays within small
@@ -175,12 +174,12 @@ void* dam_small_realloc(void* ptr, size_t size) {
     }
 
     // case 2: Grows beyond small
-    new_ptr = dam_malloc(size);
+    new_ptr = dam_malloc_internal(size);
     if (!new_ptr) return NULL;
 
     size_t copy_size = size_classes[current_index].block_size;
     memcpy(new_ptr, ptr, copy_size);
-    dam_free(ptr);
+    dam_free_internal(ptr);
 
     return new_ptr;
 }
