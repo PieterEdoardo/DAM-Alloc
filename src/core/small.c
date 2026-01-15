@@ -123,11 +123,7 @@ uint8_t size_to_class(size_t size) {
     return size_class_count - 1;
 }
 
-void* small_alloc_class(size_class_t*) {
-
-}
-
-void* dam_small_malloc(size_t size) {
+void* dam_small_malloc_unlocked(size_t size) {
     uint8_t class = size_to_class(size);
     size_class_t* size_class = &size_classes[class];
 
@@ -148,15 +144,17 @@ void* dam_small_malloc(size_t size) {
     void* ptr = (char*)block + SIZE_CLASS_HEADER_SIZE;
 
     DAM_LOG("[ALLOC] Returning pointer %p", ptr);
+
     return ptr;
 }
 
-void* dam_small_realloc(void* ptr, size_t size) {
+void* dam_small_realloc_unlocked(void* ptr, size_t size) {
+
     size_class_header_t* header = get_size_class_header(ptr);
     uint8_t current_index = header->size_class_index;
 
     // Stays within small
-    void * new_ptr;
+    void* new_ptr;
     if (size <= DAM_SMALL_MAX) {
         //case A requested class aligns to same as current
         uint8_t requested_index = size_to_class(size);
@@ -184,7 +182,7 @@ void* dam_small_realloc(void* ptr, size_t size) {
     return new_ptr;
 }
 
-void dam_small_free(void* ptr) {
+void dam_small_free_unlocked(void* ptr) {
     size_class_header_t* header = (size_class_header_t*)ptr - 1;
 
     // Double free checks
@@ -207,6 +205,29 @@ void dam_small_free(void* ptr) {
     size_classes[class].free_class_list = header;
 
     DAM_LOG("[FREE] Pointer %p freed", ptr);
+}
+
+void* dam_small_malloc(size_t size) {
+
+    dam_small_lock();
+    void* ptr = dam_small_malloc_unlocked(size);
+    dam_small_unlock();
+
+    return ptr;
+}
+
+void* dam_small_realloc(void* ptr, size_t size) {
+    dam_small_lock();
+    void* new_ptr = dam_small_realloc_unlocked(ptr, size);
+    dam_small_unlock();
+
+    return new_ptr;
+}
+
+void dam_small_free(void* ptr) {
+    dam_small_lock();
+    dam_small_free_unlocked(ptr);
+    dam_small_unlock();
 }
 
 size_class_header_t* get_size_class_header(void* ptr) {

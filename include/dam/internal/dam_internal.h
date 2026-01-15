@@ -98,3 +98,13 @@ void dam_direct_free(void* ptr);
 void* dam_small_realloc(void* ptr, size_t size);
 void* dam_general_realloc(void* ptr, size_t size);
 void* dam_direct_realloc(void* ptr, size_t size);
+
+// Multi-threading
+void dam_small_lock(void);
+void dam_small_unlock(void);
+
+void dam_general_lock(void);
+void dam_general_unlock(void);
+
+void dam_direct_lock(void);
+void dam_direct_unlock(void);
