@@ -108,3 +108,15 @@ void dam_general_unlock(void);
 
 void dam_direct_lock(void);
 void dam_direct_unlock(void);
+
+void* dam_small_malloc_unlocked(size_t size);
+void* dam_general_malloc_unlocked(size_t size);
+void* dam_direct_malloc_unlocked(size_t size);
+
+void dam_small_free_unlocked(void* ptr);
+void dam_general_free_unlocked(void* ptr, pool_header_t* pool_header);
+void dam_direct_free_unlocked(void* ptr);
+
+void* dam_small_realloc_unlocked(void* ptr, size_t size);
+void* dam_general_realloc_unlocked(void* ptr, size_t size);
+void* dam_direct_realloc_unlocked(void* ptr, size_t size);

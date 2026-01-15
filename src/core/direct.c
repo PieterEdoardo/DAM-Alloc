@@ -9,7 +9,7 @@
 
 void  dam_direct_init(void) {}
 
-void* dam_direct_malloc(size_t size) {
+void* dam_direct_malloc_unlocked(size_t size) {
     size_t total = align_up(sizeof(pool_header_t) +sizeof(block_header_t) + size, PAGE_SIZE);
 
     void* memory = mmap(
@@ -38,7 +38,16 @@ void* dam_direct_malloc(size_t size) {
     return block_header + 1;
 }
 
-void* dam_direct_realloc(void* ptr, size_t size) {
+void  dam_direct_free_unlocked(void* ptr) {
+    if (!ptr) return;
+
+    pool_header_t* pool_header = dam_pool_from_ptr(ptr);
+
+    dam_unregister_pool(pool_header);
+    munmap(pool_header, pool_header->size);
+}
+
+void* dam_direct_realloc_unlocked(void* ptr, size_t size) {
     block_header_t* block_header = direct_block_from_ptr(ptr);
     size_t old_size = block_header->size;
 
@@ -49,18 +58,18 @@ void* dam_direct_realloc(void* ptr, size_t size) {
         new_ptr = dam_malloc_internal(size);
 
         memcpy(new_ptr, ptr, old_size < size ? old_size : size);
-        dam_direct_free(ptr);
+        dam_direct_free_unlocked(ptr);
 
         return new_ptr;
     }
 
     // Case 2/3 stay inside direct
     if (size *  100 <= old_size * DAM_DIRECT_SHRINK_PERCENTAGE || size > block_header->size) {
-        new_ptr = dam_direct_malloc(size);
+        new_ptr = dam_direct_malloc_unlocked(size);
         if (!new_ptr) return NULL;
 
         memcpy(new_ptr, ptr, old_size < size ? old_size : size);
-        dam_direct_free(ptr);
+        dam_direct_free_unlocked(ptr);
 
         return new_ptr;
     }
@@ -68,14 +77,26 @@ void* dam_direct_realloc(void* ptr, size_t size) {
     return ptr;
 }
 
+void* dam_direct_malloc(size_t size) {
+    dam_direct_lock();
+    void* ptr = dam_direct_malloc_unlocked(size);
+    dam_direct_unlock();
+
+    return ptr;
+}
 
 void  dam_direct_free(void* ptr) {
-    if (!ptr) return;
+    dam_direct_lock();
+    dam_direct_free_unlocked(ptr);
+    dam_direct_unlock();
+}
 
-    pool_header_t* pool_header = dam_pool_from_ptr(ptr);
+void* dam_direct_realloc(void* ptr, size_t size) {
+    dam_direct_lock();
+    void* new_ptr = dam_direct_realloc_unlocked(ptr, size);
+    dam_direct_unlock();
 
-    dam_unregister_pool(pool_header);
-    munmap(pool_header, pool_header->size);
+    return new_ptr;
 }
 
 pool_header_t* direct_pool_from_ptr(void* ptr) {

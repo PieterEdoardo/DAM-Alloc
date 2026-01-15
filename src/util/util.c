@@ -86,12 +86,12 @@ void* dam_malloc_internal(size_t size) {
     if (size == 0) return NULL;
 
     if (size <= DAM_SMALL_MAX) {
-        return dam_small_malloc(size);
+        return dam_small_malloc_unlocked(size);
     }
     if (size <= DAM_GENERAL_MAX) {
-        return dam_general_malloc(size);
+        return dam_general_malloc_unlocked(size);
     }
-    return dam_direct_malloc(size);
+    return dam_direct_malloc_unlocked(size);
 }
 
 void dam_free_internal(void* ptr) {
@@ -108,13 +108,13 @@ void dam_free_internal(void* ptr) {
     DAM_LOG("[FREE] Pool type to be freed: %d", pool->type);
     switch (pool->type) {
         case DAM_POOL_SMALL:
-            dam_small_free(ptr);
+            dam_small_free_unlocked(ptr);
             break;
         case DAM_POOL_GENERAL:
-            dam_general_free(ptr, pool);
+            dam_general_free_unlocked(ptr, pool);
             break;
         case DAM_POOL_DIRECT:
-            dam_direct_free(ptr);
+            dam_direct_free_unlocked(ptr);
             break;
         default:
             DAM_LOG_ERROR("Unknown pool type for ptr %p", ptr);
@@ -139,13 +139,13 @@ void* dam_realloc_internal(void* ptr, size_t size) {
 
     switch (pool->type) {
         case DAM_POOL_SMALL:
-            return dam_small_realloc(ptr, size);
+            return dam_small_realloc_unlocked(ptr, size);
 
         case DAM_POOL_GENERAL:
-            return dam_general_realloc(ptr, size);
+            return dam_general_realloc_unlocked(ptr, size);
 
         case DAM_POOL_DIRECT:
-            return dam_direct_realloc(ptr, size);
+            return dam_direct_realloc_unlocked(ptr, size);
 
         default:
             DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);

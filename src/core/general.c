@@ -27,7 +27,7 @@ void  dam_general_init() {
     }
 }
 
-void* dam_general_malloc(size_t size) {
+void* dam_general_malloc_unlocked(size_t size) {
 
     size_t aligned_size = align_up(size, ALIGNMENT);
     size_t actual_size = aligned_size + sizeof(uint32_t);
@@ -75,7 +75,7 @@ void* dam_general_malloc(size_t size) {
     return ptr;
 }
 
-void dam_general_free(void* ptr, pool_header_t* pool_header) {
+void dam_general_free_unlocked(void* ptr, pool_header_t* pool_header) {
 
     block_header_t* header = (block_header_t*)((char*)ptr - BLOCK_HEADER_SIZE);
 
@@ -119,7 +119,7 @@ void dam_general_free(void* ptr, pool_header_t* pool_header) {
     DAM_LOG("[FREE] Pointer %p freed", ptr);
 }
 
-void* dam_general_realloc(void* ptr, size_t size) {
+void* dam_general_realloc_unlocked(void* ptr, size_t size) {
     block_header_t* header = (block_header_t*)((char*)ptr - BLOCK_HEADER_SIZE);
     size_t new_actual_size = align_up(size + sizeof(uint32_t), ALIGNMENT);
     // Case 1 Shrink in place
@@ -176,6 +176,28 @@ void* dam_general_realloc(void* ptr, size_t size) {
     size_t copy_size = (header->user_size < size) ? header->user_size : size;
     memcpy(new_ptr, ptr, copy_size);
     dam_free_internal(ptr);
+
+    return new_ptr;
+}
+
+void* dam_general_malloc(size_t size) {
+    dam_general_lock();
+    void* ptr = dam_general_malloc_unlocked(size);
+    dam_general_unlock();
+
+    return ptr;
+}
+
+void dam_general_free(void* ptr, pool_header_t* pool_header) {
+    dam_general_lock();
+    dam_general_free_unlocked(ptr, pool_header);
+    dam_general_unlock();
+}
+
+void* dam_general_realloc(void* ptr, size_t size) {
+    dam_general_lock();
+    void* new_ptr = dam_general_realloc_unlocked(ptr, size);
+    dam_general_unlock();
 
     return new_ptr;
 }
