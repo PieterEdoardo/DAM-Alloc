@@ -123,7 +123,7 @@ uint8_t size_to_class(size_t size) {
     return size_class_count - 1;
 }
 
-void* dam_small_malloc_unlocked(size_t size) {
+void* dam_small_malloc_internal(size_t size) {
     uint8_t class = size_to_class(size);
     size_class_t* size_class = &size_classes[class];
 
@@ -148,7 +148,7 @@ void* dam_small_malloc_unlocked(size_t size) {
     return ptr;
 }
 
-void* dam_small_realloc_unlocked(void* ptr, size_t size) {
+void* dam_small_realloc_internal(void* ptr, size_t size) {
 
     size_class_header_t* header = get_size_class_header(ptr);
     uint8_t current_index = header->size_class_index;
@@ -162,27 +162,28 @@ void* dam_small_realloc_unlocked(void* ptr, size_t size) {
             return ptr;
         }
 
-        new_ptr = dam_small_malloc(size);
+        new_ptr = dam_small_malloc_internal(size);
         if (!new_ptr) return NULL;
 
         size_t copy_size = size_classes[current_index].block_size;
         memcpy(new_ptr, ptr, copy_size);
-        dam_small_free(ptr);
+        dam_small_free_internal(ptr);
         return new_ptr;
     }
 
     // case 2: Grows beyond small
-    new_ptr = dam_malloc_internal(size);
+    dam_small_unlock();
+    new_ptr = dam_malloc(size);
     if (!new_ptr) return NULL;
 
     size_t copy_size = size_classes[current_index].block_size;
     memcpy(new_ptr, ptr, copy_size);
-    dam_free_internal(ptr);
+    dam_free(ptr);
 
     return new_ptr;
 }
 
-void dam_small_free_unlocked(void* ptr) {
+void dam_small_free_internal(void* ptr) {
     size_class_header_t* header = (size_class_header_t*)ptr - 1;
 
     // Double free checks
@@ -210,15 +211,16 @@ void dam_small_free_unlocked(void* ptr) {
 void* dam_small_malloc(size_t size) {
 
     dam_small_lock();
-    void* ptr = dam_small_malloc_unlocked(size);
+    void* ptr = dam_small_malloc_internal(size);
     dam_small_unlock();
 
     return ptr;
 }
 
 void* dam_small_realloc(void* ptr, size_t size) {
+
     dam_small_lock();
-    void* new_ptr = dam_small_realloc_unlocked(ptr, size);
+    void* new_ptr = dam_small_realloc_internal(ptr, size);
     dam_small_unlock();
 
     return new_ptr;
@@ -226,7 +228,7 @@ void* dam_small_realloc(void* ptr, size_t size) {
 
 void dam_small_free(void* ptr) {
     dam_small_lock();
-    dam_small_free_unlocked(ptr);
+    dam_small_free_internal(ptr);
     dam_small_unlock();
 }
 
