@@ -27,10 +27,10 @@ int initialized = 0;
 
 void init_allocator(void) {
     if (initialized) return;
-    dam_lock();
+    dam_global_lock();
 
     if (!verify_page_size()) {
-        dam_unlock();
+        dam_global_unlock();
         return;
     }
 
@@ -47,30 +47,30 @@ void init_allocator(void) {
     initialized = 1;
     DAM_LOG("[INIT] Allocator initialized");
 
-    dam_unlock();
+    dam_global_unlock();
 }
 
 void* dam_malloc(size_t size) {
-    dam_lock();
+    dam_global_lock();
     if (!initialized) {
         init_allocator_unlocked();
     }
     void* ptr = dam_malloc_internal(size);
-    dam_unlock();
+    dam_global_unlock();
     return ptr;
 }
 
 void* dam_realloc(void* ptr, size_t size) {
-    dam_lock();
+    dam_global_lock();
     void* new_ptr = dam_realloc_internal(ptr, size);
-    dam_unlock();
+    dam_global_unlock();
     return new_ptr;
 }
 
 void dam_free(void* ptr) {
-    dam_lock();
+    dam_global_lock();
     dam_free_internal(ptr);
-    dam_unlock();
+    dam_global_unlock();
 }
 
 

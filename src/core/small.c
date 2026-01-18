@@ -23,6 +23,18 @@
 static size_class_t* size_classes;
 static size_t size_class_count = 0;
 
+enum realloc_response_code {
+    REALLOC_IN_PLACE,
+    REALLOC_MOVE,
+    REALLOC_ERROR
+};
+
+typedef struct realloc_response {
+    enum realloc_response_code code;
+    void* ptr;
+} realloc_response_t;
+
+
 void dam_small_init(void) {
     size_t block_size = DAM_SMALL_MIN;
     size_class_count = 0;
@@ -162,12 +174,12 @@ void* dam_small_realloc_unlocked(void* ptr, size_t size) {
             return ptr;
         }
 
-        new_ptr = dam_small_malloc(size);
+        new_ptr = dam_small_malloc_unlocked(size);
         if (!new_ptr) return NULL;
 
         size_t copy_size = size_classes[current_index].block_size;
         memcpy(new_ptr, ptr, copy_size);
-        dam_small_free(ptr);
+        dam_small_free_unlocked(ptr);
         return new_ptr;
     }
 
