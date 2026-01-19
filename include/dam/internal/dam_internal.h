@@ -117,6 +117,3 @@ void dam_small_free_internal(void* ptr);
 void dam_general_free_internal(void* ptr, pool_header_t* pool_header);
 void dam_direct_free_internal(void* ptr);
 
-void* dam_small_realloc_internal(void* ptr, size_t size);
-void* dam_general_realloc_internal(void* ptr, size_t size);
-void* dam_direct_realloc_internal(void* ptr, size_t size);

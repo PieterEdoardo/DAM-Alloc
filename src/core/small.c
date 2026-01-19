@@ -160,41 +160,6 @@ void* dam_small_malloc_internal(size_t size) {
     return ptr;
 }
 
-void* dam_small_realloc_internal(void* ptr, size_t size) {
-
-    size_class_header_t* header = get_size_class_header(ptr);
-    uint8_t current_index = header->size_class_index;
-
-    // Stays within small
-    void* new_ptr;
-    if (size <= DAM_SMALL_MAX) {
-        //case A requested class aligns to same as current
-        uint8_t requested_index = size_to_class(size);
-        if (requested_index <= current_index) {
-            return ptr;
-        }
-
-        new_ptr = dam_small_malloc_internal(size);
-        if (!new_ptr) return NULL;
-
-        size_t copy_size = size_classes[current_index].block_size;
-        memcpy(new_ptr, ptr, copy_size);
-        dam_small_free_internal(ptr);
-        return new_ptr;
-    }
-
-    // case 2: Grows beyond small
-    dam_small_unlock();
-    new_ptr = dam_malloc(size);
-    if (!new_ptr) return NULL;
-
-    size_t copy_size = size_classes[current_index].block_size;
-    memcpy(new_ptr, ptr, copy_size);
-    dam_free(ptr);
-
-    return new_ptr;
-}
-
 void dam_small_free_internal(void* ptr) {
     size_class_header_t* header = (size_class_header_t*)ptr - 1;
 
@@ -230,11 +195,39 @@ void* dam_small_malloc(size_t size) {
 }
 
 void* dam_small_realloc(void* ptr, size_t size) {
+    size_class_header_t* header = get_size_class_header(ptr);
+    uint8_t current_index = header->size_class_index;
+
+    // Check if cross layer before locking
+    if (size > DAM_SMALL_MAX) {
+        size_t copy_size = size_classes[current_index].block_size;
+
+        void* new_ptr = dam_malloc(size); // Locks accounted for.
+        if (new_ptr) {
+            memcpy(new_ptr, ptr, copy_size);
+            dam_free(ptr);
+        }
+        return new_ptr;
+    }
 
     dam_small_lock();
-    void* new_ptr = dam_small_realloc_internal(ptr, size);
-    dam_small_unlock();
 
+    // Not shrink on purpose
+    uint8_t requested_index = size_to_class(size);
+    if (requested_index <= current_index) {
+        dam_small_unlock();
+        return ptr;
+    }
+
+    // Grow
+    void* new_ptr = dam_small_malloc_internal(size);
+    if (new_ptr) {
+        size_t copy_size = size_classes[current_index].block_size;
+        memcpy(new_ptr, ptr, copy_size);
+        dam_small_free_internal(ptr);
+    }
+
+    dam_small_unlock();
     return new_ptr;
 }
 

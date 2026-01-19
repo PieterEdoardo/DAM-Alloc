@@ -48,38 +48,6 @@ void  dam_direct_free_internal(void* ptr) {
     munmap(pool_header, pool_header->size);
 }
 
-void* dam_direct_realloc_internal(void* ptr, size_t size) {
-    block_header_t* block_header = direct_block_from_ptr(ptr);
-    size_t old_size = block_header->size;
-
-
-    // Case 1 Shrink to lower layer
-    void* new_ptr;
-    if (size <= DAM_GENERAL_MAX) {
-        dam_direct_unlock();
-
-        new_ptr = dam_malloc(size);
-
-        memcpy(new_ptr, ptr, old_size < size ? old_size : size);
-        dam_direct_free_internal(ptr);
-
-        return new_ptr;
-    }
-
-    // Case 2/3 stay inside direct
-    if (size *  100 <= old_size * DAM_DIRECT_SHRINK_PERCENTAGE || size > block_header->size) {
-        new_ptr = dam_direct_malloc_internal(size);
-        if (!new_ptr) return NULL;
-
-        memcpy(new_ptr, ptr, old_size < size ? old_size : size);
-        dam_direct_free_internal(ptr);
-
-        return new_ptr;
-    }
-
-    return ptr;
-}
-
 void* dam_direct_malloc(size_t size) {
     dam_direct_lock();
     void* ptr = dam_direct_malloc_internal(size);
@@ -95,11 +63,36 @@ void  dam_direct_free(void* ptr) {
 }
 
 void* dam_direct_realloc(void* ptr, size_t size) {
-    dam_direct_lock();
-    void* new_ptr = dam_direct_realloc_internal(ptr, size);
-    dam_direct_unlock();
+    block_header_t* block_header = direct_block_from_ptr(ptr);
+    size_t old_size = block_header->size;
 
-    return new_ptr;
+
+    // Case 1 Shrink to lower layer
+    void* new_ptr;
+    if (size <= DAM_GENERAL_MAX) {
+        new_ptr = dam_malloc(size);
+        if (new_ptr) {
+            memcpy(new_ptr, ptr, old_size < size ? old_size : size);
+            dam_direct_free(ptr);
+        }
+        return new_ptr;
+    }
+
+    dam_direct_lock();
+
+    // Case 2/3 stay inside direct
+    if (size *  100 <= old_size * DAM_DIRECT_SHRINK_PERCENTAGE || size > block_header->size) {
+        new_ptr = dam_direct_malloc_internal(size);
+        if (new_ptr) {
+            memcpy(new_ptr, ptr, old_size < size ? old_size : size);
+            dam_direct_free_internal(ptr);
+        }
+        dam_direct_unlock();
+        return new_ptr;
+    }
+
+    dam_direct_unlock();
+    return ptr;
 }
 
 pool_header_t* direct_pool_from_ptr(void* ptr) {

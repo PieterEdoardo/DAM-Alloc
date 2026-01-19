@@ -117,30 +117,47 @@ void dam_general_free_internal(void* ptr, pool_header_t* pool_header) {
     DAM_LOG("[FREE] Pointer %p freed", ptr);
 }
 
-void* dam_general_realloc_internal(void* ptr, size_t size) {
+void* dam_general_malloc(size_t size) {
+    dam_general_lock();
+    void* ptr = dam_general_malloc_internal(size);
+    dam_general_unlock();
+
+    return ptr;
+}
+
+void dam_general_free(void* ptr, pool_header_t* pool_header) {
+    dam_general_lock();
+    dam_general_free_internal(ptr, pool_header);
+    dam_general_unlock();
+}
+
+void* dam_general_realloc(void* ptr, size_t size) {
     block_header_t* header = (block_header_t*)((char*)ptr - BLOCK_HEADER_SIZE);
     size_t new_actual_size = align_up(size + sizeof(uint32_t), ALIGNMENT);
+
+    dam_general_lock();
+
+    if (header->magic != BLOCK_MAGIC) {
+        DAM_LOG_ERROR("Invalid pointer passed to dam_general_realloc:%p", ptr);
+        return NULL;
+    }
+
     // Case 1 Shrink in place
     if (header->size >= new_actual_size) {
-        header->user_size = size;
 
+        header->user_size = size;
         uint32_t* end_canary = (uint32_t*)((char*)ptr + size);
         *end_canary = CANARY_VALUE;
 
-        // Split if shrinking leaves enough headspace
         split_block_if_possible(header, new_actual_size);
 
+        dam_general_unlock();
         return ptr;
     }
 
     // Case 2 grow in-place if next block is free
     if (header->next && header->next->is_free) {
         size_t available_space = header->size + BLOCK_HEADER_SIZE + header->next->size;
-
-        if (header->magic != BLOCK_MAGIC) {
-            DAM_LOG_ERROR("Invalid pointer passed to dam_general_realloc:%p", ptr);
-            return NULL;
-        }
 
         if (available_space >= new_actual_size) {
 
@@ -158,46 +175,22 @@ void* dam_general_realloc_internal(void* ptr, size_t size) {
             uint32_t* end_canary = (uint32_t*)((char*)ptr + size);
             *end_canary = CANARY_VALUE;
 
-            // Split if there is room after coalescing
             split_block_if_possible(header, new_actual_size);
             stats.coalesces++;
-        }
 
-        return ptr;
+            dam_general_unlock();
+            return ptr;
+        }
     }
 
     // Case 3 Grow in-place but no next block is not free, so copy and free
-    size_t copy_size = (header->user_size < size) ? header->user_size : size;
-
     dam_general_unlock();
-
     void* new_ptr = dam_malloc(size);
-    if (!new_ptr) return NULL;
-
-    memcpy(new_ptr, ptr, copy_size);
-    dam_free(ptr);
-
-    return new_ptr;
-}
-
-void* dam_general_malloc(size_t size) {
-    dam_general_lock();
-    void* ptr = dam_general_malloc_internal(size);
-    dam_general_unlock();
-
-    return ptr;
-}
-
-void dam_general_free(void* ptr, pool_header_t* pool_header) {
-    dam_general_lock();
-    dam_general_free_internal(ptr, pool_header);
-    dam_general_unlock();
-}
-
-void* dam_general_realloc(void* ptr, size_t size) {
-    dam_general_lock();
-    void* new_ptr = dam_general_realloc_internal(ptr, size);
-    dam_general_unlock();
+    if (new_ptr) {
+        size_t copy_size = (header->user_size < size) ? header->user_size : size;
+        memcpy(new_ptr, ptr, copy_size);
+        dam_free(ptr);
+    }
 
     return new_ptr;
 }
