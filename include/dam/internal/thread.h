@@ -2,5 +2,5 @@
 
 void dam_thread_init(void);
 
-void dam_lock(void);
-void dam_unlock(void);
+void dam_global_lock(void);
+void dam_global_unlock(void);

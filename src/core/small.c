@@ -23,6 +23,18 @@
 static size_class_t* size_classes;
 static size_t size_class_count = 0;
 
+enum realloc_response_code {
+    REALLOC_IN_PLACE,
+    REALLOC_MOVE,
+    REALLOC_ERROR
+};
+
+typedef struct realloc_response {
+    enum realloc_response_code code;
+    void* ptr;
+} realloc_response_t;
+
+
 void dam_small_init(void) {
     size_t block_size = DAM_SMALL_MIN;
     size_class_count = 0;

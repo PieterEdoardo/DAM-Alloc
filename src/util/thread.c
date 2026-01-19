@@ -20,8 +20,8 @@ void dam_thread_init(void) {
     dam_lock_initialized = 1;
 }
 
-void dam_lock(void) { pthread_mutex_lock(&global_lock); }
-void dam_unlock(void) { pthread_mutex_unlock(&global_lock); }
+void dam_global_lock(void) { pthread_mutex_lock(&global_lock); }
+void dam_global_unlock(void) { pthread_mutex_unlock(&global_lock); }
 
 void dam_small_lock(void) { pthread_mutex_lock(&small_lock); }
 void dam_small_unlock(void) { pthread_mutex_unlock(&small_lock); }
