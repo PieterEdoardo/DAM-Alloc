@@ -5,11 +5,12 @@
 
 #include "dam/dam.h"
 #include "dam/dam_config.h"
+#include "dam/dam_log.h"
 #include "dam/internal/dam_internal.h"
 
 void  dam_direct_init(void) {}
 
-void* dam_direct_malloc_unlocked(size_t size) {
+void* dam_direct_malloc_internal(size_t size) {
     size_t total = align_up(sizeof(pool_header_t) +sizeof(block_header_t) + size, PAGE_SIZE);
 
     void* memory = mmap(
@@ -38,7 +39,7 @@ void* dam_direct_malloc_unlocked(size_t size) {
     return block_header + 1;
 }
 
-void  dam_direct_free_unlocked(void* ptr) {
+void  dam_direct_free_internal(void* ptr) {
     if (!ptr) return;
 
     pool_header_t* pool_header = dam_pool_from_ptr(ptr);
@@ -47,7 +48,7 @@ void  dam_direct_free_unlocked(void* ptr) {
     munmap(pool_header, pool_header->size);
 }
 
-void* dam_direct_realloc_unlocked(void* ptr, size_t size) {
+void* dam_direct_realloc_internal(void* ptr, size_t size) {
     block_header_t* block_header = direct_block_from_ptr(ptr);
     size_t old_size = block_header->size;
 
@@ -55,21 +56,23 @@ void* dam_direct_realloc_unlocked(void* ptr, size_t size) {
     // Case 1 Shrink to lower layer
     void* new_ptr;
     if (size <= DAM_GENERAL_MAX) {
-        new_ptr = dam_malloc_internal(size);
+        dam_direct_unlock();
+
+        new_ptr = dam_malloc(size);
 
         memcpy(new_ptr, ptr, old_size < size ? old_size : size);
-        dam_direct_free_unlocked(ptr);
+        dam_direct_free_internal(ptr);
 
         return new_ptr;
     }
 
     // Case 2/3 stay inside direct
     if (size *  100 <= old_size * DAM_DIRECT_SHRINK_PERCENTAGE || size > block_header->size) {
-        new_ptr = dam_direct_malloc_unlocked(size);
+        new_ptr = dam_direct_malloc_internal(size);
         if (!new_ptr) return NULL;
 
         memcpy(new_ptr, ptr, old_size < size ? old_size : size);
-        dam_direct_free_unlocked(ptr);
+        dam_direct_free_internal(ptr);
 
         return new_ptr;
     }
@@ -79,7 +82,7 @@ void* dam_direct_realloc_unlocked(void* ptr, size_t size) {
 
 void* dam_direct_malloc(size_t size) {
     dam_direct_lock();
-    void* ptr = dam_direct_malloc_unlocked(size);
+    void* ptr = dam_direct_malloc_internal(size);
     dam_direct_unlock();
 
     return ptr;
@@ -87,13 +90,13 @@ void* dam_direct_malloc(size_t size) {
 
 void  dam_direct_free(void* ptr) {
     dam_direct_lock();
-    dam_direct_free_unlocked(ptr);
+    dam_direct_free_internal(ptr);
     dam_direct_unlock();
 }
 
 void* dam_direct_realloc(void* ptr, size_t size) {
     dam_direct_lock();
-    void* new_ptr = dam_direct_realloc_unlocked(ptr, size);
+    void* new_ptr = dam_direct_realloc_internal(ptr, size);
     dam_direct_unlock();
 
     return new_ptr;

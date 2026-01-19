@@ -27,10 +27,8 @@ int initialized = 0;
 
 void init_allocator(void) {
     if (initialized) return;
-    dam_global_lock();
 
     if (!verify_page_size()) {
-        dam_global_unlock();
         return;
     }
 
@@ -47,30 +45,80 @@ void init_allocator(void) {
     initialized = 1;
     DAM_LOG("[INIT] Allocator initialized");
 
-    dam_global_unlock();
 }
 
 void* dam_malloc(size_t size) {
-    dam_global_lock();
     if (!initialized) {
         init_allocator_unlocked();
     }
-    void* ptr = dam_malloc_internal(size);
-    dam_global_unlock();
-    return ptr;
+    if (size == 0) return NULL;
+
+    if (size <= DAM_SMALL_MAX) {
+        return dam_small_malloc(size);
+    }
+    if (size <= DAM_GENERAL_MAX) {
+        return dam_general_malloc(size);
+    }
+    return dam_direct_malloc(size);
 }
 
 void* dam_realloc(void* ptr, size_t size) {
-    dam_global_lock();
-    void* new_ptr = dam_realloc_internal(ptr, size);
-    dam_global_unlock();
-    return new_ptr;
+    if (!ptr) return dam_malloc(size);
+
+    if (size == 0) {
+        dam_free(ptr);
+        return NULL;
+    }
+
+    pool_header_t* pool = dam_pool_from_ptr(ptr);
+
+    if (!pool) {
+        DAM_LOG_ERROR("[REALLOC] Pointer does not belong to DAM: %p", ptr);
+        return NULL;
+    }
+
+    switch (pool->type) {
+        case DAM_POOL_SMALL:
+            return dam_small_realloc(ptr, size);
+
+        case DAM_POOL_GENERAL:
+            return dam_general_realloc(ptr, size);
+
+        case DAM_POOL_DIRECT:
+            return dam_direct_realloc(ptr, size);
+
+        default:
+            DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
+            return NULL;
+    }
 }
 
 void dam_free(void* ptr) {
-    dam_global_lock();
-    dam_free_internal(ptr);
-    dam_global_unlock();
+    if (!ptr)
+        return;
+
+    pool_header_t* pool = dam_pool_from_ptr(ptr);
+
+    if (!pool) {
+        DAM_LOG_ERROR("[FREE] Pointer does not belong to DAM pool: %p", ptr);
+        return;
+    }
+
+    DAM_LOG("[FREE] Pool type to be freed: %d", pool->type);
+    switch (pool->type) {
+        case DAM_POOL_SMALL:
+            dam_small_free(ptr);
+            break;
+        case DAM_POOL_GENERAL:
+            dam_general_free(ptr, pool);
+            break;
+        case DAM_POOL_DIRECT:
+            dam_direct_free(ptr);
+            break;
+        default:
+            DAM_LOG_ERROR("Unknown pool type for ptr %p", ptr);
+            break;
+    }
 }
 
 
