@@ -1,7 +1,4 @@
 #include <stdio.h>
-#include <stdint.h>
-#include <stddef.h>
-#include <string.h>
 
 #include "dam/dam.h"
 #include "dam/dam_config.h"
@@ -25,11 +22,12 @@
 pool_header_t* dam_pool_list = NULL;
 int initialized = 0;
 
-void init_allocator(void) {
-    if (initialized) return;
+// Returns 0 on success, 1 on failure.
+int dam_init(void) {
+    if (initialized) return 0;
 
     if (!verify_page_size()) {
-        return;
+        return 1;
     }
 
     DAM_LOG("[INIT] Initializing multi-threading...");
@@ -45,20 +43,19 @@ void init_allocator(void) {
     initialized = 1;
     DAM_LOG("[INIT] Allocator initialized");
 
+    return 0;
 }
 
 void* dam_malloc(size_t size) {
-    if (!initialized) {
-        init_allocator_unlocked();
-    }
+
+    if (!initialized) dam_init();
+
     if (size == 0) return NULL;
 
-    if (size <= DAM_SMALL_MAX) {
-        return dam_small_malloc(size);
-    }
-    if (size <= DAM_GENERAL_MAX) {
-        return dam_general_malloc(size);
-    }
+    if (size <= DAM_SMALL_MAX) return dam_small_malloc(size);
+
+    if (size <= DAM_GENERAL_MAX) return dam_general_malloc(size);
+
     return dam_direct_malloc(size);
 }
 
