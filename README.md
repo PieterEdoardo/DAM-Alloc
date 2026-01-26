@@ -4,6 +4,8 @@ DAM is a custom memory allocator written in C, designed as an educational yet pr
 
 It implements **three allocation layers**, each optimized for a specific size range, with clear separation of responsibilities and explicit bookkeeping.
 
+This repository uses AI generated placeholder documention during development. The final version will include handwritten documentation instead.
+
 ---
 
 ## Architecture Overview
