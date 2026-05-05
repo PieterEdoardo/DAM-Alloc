@@ -47,6 +47,7 @@
 #define SIZE_CLASS_HEADER_SIZE align_up(sizeof(size_class_header_t), ALIGNMENT)
 
 // Size classes
+#define DAM_SIZE_CLASS_COUNT ((__builtin_ctzll(DAM_SMALL_MAX) - __builtin_ctzll(DAM_SMALL_MIN)) + 1)
 #define SIZE_CLASS_MULTIPLIER 2
 #define SIZE_CLASS_BLOCKS_PER_POOL 1000
 

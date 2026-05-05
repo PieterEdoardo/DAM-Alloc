@@ -5,6 +5,7 @@
 #include "dam/dam.h"
 #include "dam/dam_config.h"
 #include "dam/dam_log.h"
+#include "dam/internal/thread.h"
 
 
 /**********************************************************
@@ -20,60 +21,26 @@
  * Blocks belong to size classes.
  * Pools only provide memory.
  **********************************************************/
-static size_class_t* size_classes;
-static size_t size_class_count = 0;
-
-enum realloc_response_code {
-    REALLOC_IN_PLACE,
-    REALLOC_MOVE,
-    REALLOC_ERROR
-};
-
-typedef struct realloc_response {
-    enum realloc_response_code code;
-    void* ptr;
-} realloc_response_t;
-
+static size_class_t* size_classes[DAM_SIZE_CLASS_COUNT];
 
 void dam_small_init(void) {
     size_t block_size = DAM_SMALL_MIN;
-    size_class_count = 0;
 
-    while (block_size <= DAM_SMALL_MAX) {
-        size_class_count++;
+    for (size_t i = 0; i < DAM_SIZE_CLASS_COUNT; i++) {
+        size_classes[i]->block_size = block_size;
+        size_classes[i]->free_class_list = NULL;
+        size_classes[i]->pools = NULL;
         block_size *= SIZE_CLASS_MULTIPLIER;
     }
 
-    size_classes = mmap(
-        NULL,
-        size_class_count * sizeof(size_class_t),
-        PROT_READ | PROT_WRITE,
-        MAP_PRIVATE | MAP_ANONYMOUS,
-        -1,
-        0
-    );
-
-    if (size_classes == MAP_FAILED) {
-        DAM_LOG_ERROR("[INIT] mmap failed for size class initialization");
-        return;
-    }
-
-    block_size = DAM_SMALL_MIN;
-    for (size_t j = 0; j < size_class_count; j++) {
-        size_classes[j].block_size = block_size;
-        size_classes[j].free_class_list = NULL;
-        size_classes[j].pools = NULL;
-        block_size *= SIZE_CLASS_MULTIPLIER;
-    }
-
-    DAM_LOG("[INIT] Small allocator initialized (%zu classes)", size_class_count);
+    DAM_LOG("[INIT] Small allocator initialized (%d classes)", DAM_SIZE_CLASS_COUNT);
 }
 
 static pool_header_t* create_small_pool(uint8_t class_index) {
-    size_t usable_bytes = (sizeof(size_class_header_t) + size_classes[class_index].block_size) * SIZE_CLASS_BLOCKS_PER_POOL;
+    size_t usable_bytes = (sizeof(size_class_header_t) + size_classes[class_index]->block_size) * SIZE_CLASS_BLOCKS_PER_POOL;
     size_t pool_size = align_up( sizeof(pool_header_t) + usable_bytes, ALIGNMENT);
 
-    DAM_LOG("[POOL] Creating size class pool for class %zuB with total size of %zuB...", size_classes[class_index].block_size, pool_size);
+    DAM_LOG("[POOL] Creating size class pool for class %zuB with total size of %zuB...", size_classes[class_index]->block_size, pool_size);
 
     void* memory = mmap(
         NULL,
@@ -96,7 +63,7 @@ static pool_header_t* create_small_pool(uint8_t class_index) {
 
     dam_register_pool(new_pool);
 
-    size_t block_stride = SIZE_CLASS_HEADER_SIZE + size_classes[class_index].block_size;
+    size_t block_stride = SIZE_CLASS_HEADER_SIZE + size_classes[class_index]->block_size;
     char* cursor = (char*)memory + align_up(sizeof(pool_header_t), ALIGNMENT);
     char* pool_end = (char*)memory + pool_size;
 
@@ -117,7 +84,7 @@ static pool_header_t* create_small_pool(uint8_t class_index) {
 
         cursor += block_stride;
     }
-    size_classes[class_index].free_class_list = free_class_list;
+    size_classes[class_index]->free_class_list = free_class_list;
 
     stats.pools_created++;
     DAM_LOG("[POOL] Created at %p with %zu bytes usable. Total pools: %zu", memory, pool_size, stats.pools_created);
@@ -125,19 +92,19 @@ static pool_header_t* create_small_pool(uint8_t class_index) {
 }
 
 uint8_t size_to_class(size_t size) {
-    for (size_t i = 0; i < size_class_count; i++) {
-        if (size <= size_classes[i].block_size) {
+    for (size_t i = 0; i < DAM_SIZE_CLASS_COUNT; i++) {
+        if (size <= size_classes[i]->block_size) {
             return i;
         }
     }
 
     // Should never happen if caller checks DAM_SMALL_MAX
-    return size_class_count - 1;
+    return DAM_SIZE_CLASS_COUNT - 1;
 }
 
 void* dam_small_malloc_internal(size_t size) {
     uint8_t class = size_to_class(size);
-    size_class_t* size_class = &size_classes[class];
+    size_class_t* size_class = size_classes[class];
 
     if (!size_class->free_class_list && !create_small_pool(class)) {
         DAM_LOG_ERROR("[ALLOC] No free list and Could not create new pool.");
@@ -160,32 +127,31 @@ void* dam_small_malloc_internal(size_t size) {
     return ptr;
 }
 
-void dam_small_free_internal(void* ptr) {
-    size_class_header_t* header = (size_class_header_t*)ptr - 1;
-
-    // Double free checks
-    if (header->magic == FREED_MAGIC) {
-        DAM_LOG_ERROR("[FREE] Double free detected at %p!", ptr);
-        return;
-    }
-
-    // Invalid pointer checks
-    if (header->magic != BLOCK_MAGIC) {
-        DAM_LOG_ERROR("[FREE] Invalid pointer passed to dam_free: %p", ptr);
-        return;
-    }
-
-    uint8_t class = header->size_class_index;
-    header->is_free = 1;
-    header->magic = FREED_MAGIC;
-
-    header->next = size_classes[class].free_class_list;
-    size_classes[class].free_class_list = header;
-
-    DAM_LOG("[FREE] Pointer %p freed", ptr);
-}
-
 void* dam_small_malloc(size_t size) {
+    uint8_t class = size_to_class(size);
+
+    // Attempt fast path
+    thread_cache_t* tc = dam_get_thread_cache();
+    if ( tc && tc->bins[class].free_list) {
+        // Cache hit!
+        size_class_header_t* block = tc->bins[class].free_list;
+        tc->bins[class].free_list = block->next;
+        tc->bins[class].count--;
+        tc->allocations++;
+
+        block->is_free = 0;
+        block->magic = BLOCK_MAGIC;
+        block->next = NULL;
+
+        stats.allocations++;
+
+        void* ptr = (char*)block + SIZE_CLASS_HEADER_SIZE;
+        DAM_LOG("[TCACHE HIT] Returning %p from tcache (class=%u, remaining=%zu)",
+                ptr, class, tc->bins[class].count);
+
+        return ptr;
+    }
+
 
     dam_small_lock();
     void* ptr = dam_small_malloc_internal(size);
@@ -200,7 +166,7 @@ void* dam_small_realloc(void* ptr, size_t size) {
 
     // Check if cross layer before locking
     if (size > DAM_SMALL_MAX) {
-        size_t copy_size = size_classes[current_index].block_size;
+        size_t copy_size = size_classes[current_index]->block_size;
 
         void* new_ptr = dam_malloc(size); // Locks accounted for.
         if (new_ptr) {
@@ -222,13 +188,38 @@ void* dam_small_realloc(void* ptr, size_t size) {
     // Grow
     void* new_ptr = dam_small_malloc_internal(size);
     if (new_ptr) {
-        size_t copy_size = size_classes[current_index].block_size;
+        size_t copy_size = size_classes[current_index]->block_size;
         memcpy(new_ptr, ptr, copy_size);
         dam_small_free_internal(ptr);
     }
 
     dam_small_unlock();
     return new_ptr;
+}
+
+void dam_small_free_internal(void* ptr) {
+    size_class_header_t* header = (size_class_header_t*)ptr - 1;
+
+    // Double free checks
+    if (header->magic == FREED_MAGIC) {
+        DAM_LOG_ERROR("[FREE] Double free detected at %p!", ptr);
+        return;
+    }
+
+    // Invalid pointer checks
+    if (header->magic != BLOCK_MAGIC) {
+        DAM_LOG_ERROR("[FREE] Invalid pointer passed to dam_free: %p", ptr);
+        return;
+    }
+
+    uint8_t class = header->size_class_index;
+    header->is_free = 1;
+    header->magic = FREED_MAGIC;
+
+    header->next = size_classes[class]->free_class_list;
+    size_classes[class]->free_class_list = header;
+
+    DAM_LOG("[FREE] Pointer %p freed", ptr);
 }
 
 void dam_small_free(void* ptr) {
@@ -239,4 +230,10 @@ void dam_small_free(void* ptr) {
 
 size_class_header_t* get_size_class_header(void* ptr) {
     return (size_class_header_t*)ptr - 1;
+}
+
+void dam_small_free_to_central(void* ptr) {
+    dam_small_lock();
+    dam_small_free_internal(ptr);
+    dam_small_unlock();
 }
