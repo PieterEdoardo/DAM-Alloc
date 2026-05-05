@@ -63,7 +63,7 @@ bytes, in accordance with C standard semantics.
 
 ## Thread Safety
 
-Multithreading support is **planned**.
+Multithreading support is **in development**. Only TLC not finished.
 
 Current design intentionally separates allocator layers and pool bookkeeping to enable:
 - Coarse-grained locking (initial)
