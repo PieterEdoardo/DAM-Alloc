@@ -119,6 +119,7 @@ void* dam_small_malloc_internal(size_t size) {
 
     block->is_free = 0;
     block->magic = BLOCK_MAGIC;
+    // block->next = NULL;
 
     void* ptr = (char*)block + SIZE_CLASS_HEADER_SIZE;
 
@@ -198,7 +199,7 @@ void* dam_small_realloc(void* ptr, size_t size) {
 }
 
 void dam_small_free_internal(void* ptr) {
-    size_class_header_t* header = (size_class_header_t*)ptr - 1;
+    size_class_header_t* header = get_size_class_header(ptr);
 
     // Double free checks
     if (header->magic == FREED_MAGIC) {
@@ -252,7 +253,7 @@ void dam_small_free(void* ptr) {
 }
 
 size_class_header_t* get_size_class_header(void* ptr) {
-    return (size_class_header_t*)ptr - 1;
+    return (size_class_header_t*)(char*)ptr - SIZE_CLASS_HEADER_SIZE;
 }
 
 void dam_small_free_to_central(void* ptr) {

@@ -1,124 +1,81 @@
-// test_tcache.c
-#include <pthread.h>
+
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
 #include <stdio.h>
-#include <assert.h>
+#include <time.h>
+
 #include "dam/dam.h"
 #include "dam/dam_log.h"
 
-// Test 1: Single-threaded cache reuse
-void test_tcache_reuse(void) {
-    DAM_LOG("\n=== Test 1: TCache Reuse ===");
+#define SLOTS 4096
+#define ITERS 5000000
+#define MAX_ALLOC 8192
 
-    void* p1 = dam_malloc(32);
-    printf("Allocated p1 = %p\n", p1);
+typedef struct {
+    void *ptr;
+    size_t size;
+    uint32_t magic;
+} slot_t;
 
-    dam_free(p1);
-    printf("Freed p1\n");
+static slot_t slots[SLOTS];
 
-    void* p2 = dam_malloc(32);
-    printf("Allocated p2 = %p\n", p2);
-
-    if (p1 == p2) {
-        DAM_LOG("[PASS] TCache reused block: %p == %p", p1, p2);
-    } else {
-        DAM_LOG("[FAIL] TCache didn't reuse: %p != %p", p1, p2);
-    }
-
-    dam_free(p2);
-}
-
-// Test 2: Cache fills up
-void test_tcache_overflow(void) {
-    DAM_LOG("\n=== Test 2: TCache Overflow ===");
-
-    void* ptrs[100];
-
-    // Allocate 100 blocks
-    for (int i = 0; i < 100; i++) {
-        ptrs[i] = dam_malloc(32);
-    }
-
-    // Free all - first 64 go to tcache, rest to central
-    for (int i = 0; i < 100; i++) {
-        dam_free(ptrs[i]);
-    }
-
-    DAM_LOG("[PASS] Freed 100 blocks without crash");
-}
-
-// Test 3: Different size classes
-void test_tcache_size_classes(void) {
-    DAM_LOG("\n=== Test 3: Multiple Size Classes ===");
-
-    void* p32_1 = dam_malloc(32);
-    void* p64_1 = dam_malloc(64);
-    void* p128_1 = dam_malloc(128);
-
-    dam_free(p32_1);
-    dam_free(p64_1);
-    dam_free(p128_1);
-
-    void* p32_2 = dam_malloc(32);
-    void* p64_2 = dam_malloc(64);
-    void* p128_2 = dam_malloc(128);
-
-    assert(p32_1 == p32_2);
-    assert(p64_1 == p64_2);
-    assert(p128_1 == p128_2);
-
-    DAM_LOG("[PASS] All size classes reused correctly");
-
-    dam_free(p32_2);
-    dam_free(p64_2);
-    dam_free(p128_2);
-}
-
-// Test 4: Multi-threaded
-void* thread_worker(void* arg) {
-    int thread_id = *(int*)arg;
-    DAM_LOG("[Thread %d] Starting", thread_id);
-
-    void* ptrs[50];
-
-    // Allocate and free many times
-    for (int round = 0; round < 10; round++) {
-        for (int i = 0; i < 50; i++) {
-            ptrs[i] = dam_malloc(32);
-        }
-        for (int i = 0; i < 50; i++) {
-            dam_free(ptrs[i]);
-        }
-    }
-
-    DAM_LOG("[Thread %d] Completed 500 alloc/free cycles", thread_id);
-    return NULL;
-}
-
-void test_tcache_multithread(void) {
-    DAM_LOG("\n=== Test 4: Multi-threaded ===");
-
-    pthread_t threads[4];
-    int thread_ids[4] = {1, 2, 3, 4};
-
-    for (int i = 0; i < 4; i++) {
-        pthread_create(&threads[i], NULL, thread_worker, &thread_ids[i]);
-    }
-
-    for (int i = 0; i < 4; i++) {
-        pthread_join(threads[i], NULL);
-    }
-
-    DAM_LOG("[PASS] All threads completed without deadlock");
+static uint32_t rand32(void) {
+    return ((uint32_t)rand() << 16) ^ rand();
 }
 
 int main(void) {
-    DAM_LOG("Starting TCache Tests\n");
+    srand((unsigned)time(NULL));
 
-    test_tcache_reuse();
-    test_tcache_overflow();
-    test_tcache_size_classes();
-    test_tcache_multithread();
+    for (size_t i = 0; i < ITERS; i++) {
+        size_t idx = rand32() % SLOTS;
 
-    DAM_LOG("\n=== All Tests Passed ===");
+        if (slots[idx].ptr && (rand32() % 100) < 55) {
+            /* verify pattern before free */
+            uint32_t *p = slots[idx].ptr;
+
+            for (size_t j = 0; j < slots[idx].size / sizeof(uint32_t); j++) {
+                if (p[j] != slots[idx].magic) {
+                    fprintf(stderr,
+                        "CORRUPTION DETECTED idx=%zu iter=%zu\n",
+                        idx, i);
+                    abort();
+                }
+            }
+
+            dam_free(slots[idx].ptr);
+            slots[idx].ptr = NULL;
+        } else {
+            size_t size;
+
+            /* heavily bias toward small allocations */
+            switch (rand32() % 5) {
+                case 0: size = rand32() % 32 + 1; break;
+                case 1: size = rand32() % 128 + 1; break;
+                case 2: size = rand32() % 512 + 1; break;
+                case 3: size = rand32() % 2048 + 1; break;
+                default: size = rand32() % MAX_ALLOC + 1;
+            }
+
+            void *p = dam_malloc(size);
+
+            if (!p) {
+                fprintf(stderr, "malloc failed\n");
+                abort();
+            }
+
+            uint32_t magic = rand32();
+
+            for (size_t j = 0; j < size / sizeof(uint32_t); j++) {
+                ((uint32_t *)p)[j] = magic;
+            }
+
+            slots[idx].ptr = p;
+            slots[idx].size = size;
+            slots[idx].magic = magic;
+        }
+    }
+
+    printf("done\n");
     return 0;
 }
