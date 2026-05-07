@@ -31,6 +31,7 @@ dam_malloc()
 - Preallocated pools
 - O(1) allocation/free
 - Minimal fragmentation
+- Thead local caches for short path
 
 ### General Allocator
 - Growing memory pools
@@ -79,7 +80,7 @@ Current design intentionally separates allocator layers and pool bookkeeping to 
 - [x] Direct allocator
 - [x] Cross-layer realloc
 - [x] Torture-tested realloc correctness
-- [ ] Multithreading (in progress)
+- [x] Multithreading (in progress)
 - [ ] Performance benchmarks
 - [ ] Extensive diagnostics tooling
 
