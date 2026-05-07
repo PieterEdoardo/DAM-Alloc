@@ -6,8 +6,8 @@
 
 #include "internal/dam_internal.h"
 
-/* ================================
- * Build configuration
+/* ================================ *
+ * Build configuration              *
  * ================================ */
 #ifndef DAM_DEBUG
 #define DAM_DEBUG 1
@@ -25,15 +25,15 @@
 #define DAM_ENABLE_VALIDATION 1
 #endif
 
-/******************
+/*****************
  * Configuration *
- ******************/
+ *****************/
 #define DAM_SMALL_MIN 32
 #define DAM_SMALL_MAX 256
 #define DAM_GENERAL_MAX KiB(64)
 #define MAX_POOLS 10
 #define INITIAL_POOL_SIZE MiB(1)
-#define DAM_DIRECT_SHRINK_PERCENT 80
+#define DAM_DIRECT_SHRINK_PERCENTAGE 80
 
 /********************
  * Size & alignment *
@@ -47,25 +47,26 @@
 #define SIZE_CLASS_HEADER_SIZE align_up(sizeof(size_class_header_t), ALIGNMENT)
 
 // Size classes
+#define DAM_SIZE_CLASS_COUNT ((__builtin_ctzll(DAM_SMALL_MAX) - __builtin_ctzll(DAM_SMALL_MIN)) + 1)
 #define SIZE_CLASS_MULTIPLIER 2
 #define SIZE_CLASS_BLOCKS_PER_POOL 1000
+
+// Pools & blocks
 #define MIN_BLOCK_SIZE ALIGN_UP_CONST(BLOCK_HEADER_SIZE + DAM_SMALL_MAX, ALIGNMENT)
-
-
-#define POOL_SMALL_SIZE ALIGN_UP_CONST(sizeof(pool_header_t), PAGE_SIZE)
 #define POOL_GENERAL_SIZE ALIGN_UP_CONST(sizeof(pool_header_t), PAGE_SIZE)
 /******************
- * resources *
+ * resources      *
  ******************/
 #define KiB(x) ((size_t)(x) * 1024)
 #define MiB(x) (KiB(x) * 1024)
 #define GiB(x) (MiB(x) * 1024)
 #define BLOCK_MAGIC 0xDEADBEEF
 #define FREED_MAGIC 0xFEEDFACE
+#define SMALL_MAGIC 0xD34D
 #define CANARY_VALUE 0xDEADC0DE
 
-/* ================================
- * Platform invariants
+/* ================================ *
+ * Platform invariants              *
  * ================================ */
 _Static_assert(ALIGNMENT >= _Alignof(max_align_t), "ALIGNMENT must match platform max alignment");
 _Static_assert(BLOCK_HEADER_SIZE % ALIGNMENT == 0, "HEAD_SIZE must preserve payload alignment");
@@ -77,4 +78,4 @@ _Static_assert((DAM_SMALL_MAX & DAM_SMALL_MAX - 1) == 0, "DAM_SMALL_MAX must be 
 _Static_assert(DAM_SMALL_MIN <= DAM_SMALL_MAX, "Invalid size class range");
 _Static_assert(DAM_SMALL_MAX <= DAM_GENERAL_MAX, "Invalid allocator boundaries");
 
-#endif /* DAM_CONFIG_H */
+#endif

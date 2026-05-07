@@ -1,11 +1,9 @@
 #include <stdio.h>
-#include <stdint.h>
-#include <stddef.h>
-#include <string.h>
 
 #include "dam/dam.h"
 #include "dam/dam_config.h"
 #include "dam/internal/dam_internal.h"
+#include "dam/internal/thread.h"
 #include "dam/dam_log.h"
 
 /**********************************************************
@@ -21,43 +19,44 @@
  *  - routing free() / realloc()
  **********************************************************/
 
-// Invariant: The pool header must be the single source of truth for ownership.
 pool_header_t* dam_pool_list = NULL;
 int initialized = 0;
 
-void init_allocator(void) {
-    if (initialized) return;
+// Returns 0 on success, 1 on failure.
+int dam_init(void) {
+    if (initialized) return 0;
 
     if (!verify_page_size()) {
-        return;
+        return 1;
     }
 
+    DAM_LOG("[INIT] Initializing multi-threading...");
+    dam_thread_init();
+
+    DAM_LOG("[INIT] Initializing size class allocator...");
     dam_small_init();
-    DAM_LOG("[INIT] Initialized size class allocator...");
+    DAM_LOG("[INIT] Initializing growing pool allocator...");
     dam_general_init();
-    DAM_LOG("[INIT] Initialized growing pool allocator...");
+    DAM_LOG("[INIT] Initializing direct mmap() allocator...");
     dam_direct_init();
-    DAM_LOG("[INIT] Initialized direct mmap() allocator...");
 
     initialized = 1;
     DAM_LOG("[INIT] Allocator initialized");
+
+    return 0;
 }
 
 void* dam_malloc(size_t size) {
-    if (!initialized) init_allocator();
+
+    if (!initialized) dam_init();
+
     if (size == 0) return NULL;
 
-    if (size <= DAM_SMALL_MAX) {
-        return dam_small_malloc(size);
-        // DAM_LOG_ERROR("SMALL_MALLOC NOT IMPLEMENTED");
-    } else if (size <= DAM_GENERAL_MAX) {
-        return dam_general_malloc(size);
-        DAM_LOG_ERROR("NOT IMPLEMENTED");
-    } else {
-        // return dam_direct_malloc(size);
-        DAM_LOG_ERROR("DIRECT_MALLOC NOT IMPLEMENTED");
-    }
-    return NULL;
+    if (size <= DAM_SMALL_MAX) return dam_small_malloc(size);
+
+    if (size <= DAM_GENERAL_MAX) return dam_general_malloc(size);
+
+    return dam_direct_malloc(size);
 }
 
 void* dam_realloc(void* ptr, size_t size) {
@@ -92,10 +91,8 @@ void* dam_realloc(void* ptr, size_t size) {
 }
 
 void dam_free(void* ptr) {
-    if (!ptr) {
-        DAM_LOG_ERROR("[FREE] NULL pointer");
+    if (!ptr)
         return;
-    }
 
     pool_header_t* pool = dam_pool_from_ptr(ptr);
 
@@ -113,8 +110,7 @@ void dam_free(void* ptr) {
             dam_general_free(ptr, pool);
             break;
         case DAM_POOL_DIRECT:
-            DAM_LOG_ERROR("DIRECT FREE NOT IMPLEMENTED");
-            // dam_direct_free(ptr);
+            dam_direct_free(ptr);
             break;
         default:
             DAM_LOG_ERROR("Unknown pool type for ptr %p", ptr);

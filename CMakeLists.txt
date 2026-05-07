@@ -10,6 +10,7 @@ add_library(dam
         src/core/general.c
         src/core/direct.c
         src/util/util.c
+        src/util/thread.c
 )
 
 target_include_directories(dam PUBLIC

@@ -5,6 +5,7 @@
 #include "dam/dam.h"
 #include "dam/dam_config.h"
 #include "dam/dam_log.h"
+#include "dam/internal/thread.h"
 
 
 /**********************************************************
@@ -20,41 +21,19 @@
  * Blocks belong to size classes.
  * Pools only provide memory.
  **********************************************************/
-static size_class_t* size_classes;
-static size_t size_class_count = 0;
+static size_class_t size_classes[DAM_SIZE_CLASS_COUNT];
 
 void dam_small_init(void) {
     size_t block_size = DAM_SMALL_MIN;
-    size_class_count = 0;
 
-    while (block_size <= DAM_SMALL_MAX) {
-        size_class_count++;
+    for (size_t i = 0; i < DAM_SIZE_CLASS_COUNT; i++) {
+        size_classes[i].block_size = block_size;
+        size_classes[i].free_class_list = NULL;
+        size_classes[i].pools = NULL;
         block_size *= SIZE_CLASS_MULTIPLIER;
     }
 
-    size_classes = mmap(
-        NULL,
-        size_class_count * sizeof(size_class_t),
-        PROT_READ | PROT_WRITE,
-        MAP_PRIVATE | MAP_ANONYMOUS,
-        -1,
-        0
-    );
-
-    if (size_classes == MAP_FAILED) {
-        DAM_LOG_ERROR("[INIT] mmap failed for size class initialization");
-        return;
-    }
-
-    block_size = DAM_SMALL_MIN;
-    for (size_t j = 0; j < size_class_count; j++) {
-        size_classes[j].block_size = block_size;
-        size_classes[j].free_class_list = NULL;
-        size_classes[j].pools = NULL;
-        block_size *= SIZE_CLASS_MULTIPLIER;
-    }
-
-    DAM_LOG("[INIT] Small allocator initialized (%zu classes)", size_class_count);
+    DAM_LOG("[INIT] Small allocator initialized (%d classes)", DAM_SIZE_CLASS_COUNT);
 }
 
 static pool_header_t* create_small_pool(uint8_t class_index) {
@@ -113,21 +92,17 @@ static pool_header_t* create_small_pool(uint8_t class_index) {
 }
 
 uint8_t size_to_class(size_t size) {
-    for (size_t i = 0; i < size_class_count; i++) {
+    for (size_t i = 0; i < DAM_SIZE_CLASS_COUNT; i++) {
         if (size <= size_classes[i].block_size) {
             return i;
         }
     }
 
     // Should never happen if caller checks DAM_SMALL_MAX
-    return size_class_count - 1;
+    return DAM_SIZE_CLASS_COUNT - 1;
 }
 
-void* small_alloc_class(size_class_t*) {
-
-}
-
-void* dam_small_malloc(size_t size) {
+void* dam_small_malloc_internal(size_t size) {
     uint8_t class = size_to_class(size);
     size_class_t* size_class = &size_classes[class];
 
@@ -148,44 +123,81 @@ void* dam_small_malloc(size_t size) {
     void* ptr = (char*)block + SIZE_CLASS_HEADER_SIZE;
 
     DAM_LOG("[ALLOC] Returning pointer %p", ptr);
+
+    return ptr;
+}
+
+void* dam_small_malloc(size_t size) {
+    uint8_t class = size_to_class(size);
+
+    // Attempt fast path
+    thread_cache_t* tc = dam_get_thread_cache();
+    if ( tc && tc->bins[class].free_list) {
+        // Cache hit!
+        size_class_header_t* block = tc->bins[class].free_list;
+        tc->bins[class].free_list = block->next;
+        tc->bins[class].count--;
+        tc->allocations++;
+
+        block->is_free = 0;
+        block->magic = BLOCK_MAGIC;
+        block->next = NULL;
+
+        stats.allocations++;
+
+        void* ptr = (char*)block + SIZE_CLASS_HEADER_SIZE;
+        DAM_LOG("[TCACHE HIT] Returning %p from tcache (class=%u, remaining=%zu)",
+                ptr, class, tc->bins[class].count);
+
+        return ptr;
+    }
+
+
+    dam_small_lock();
+    void* ptr = dam_small_malloc_internal(size);
+    dam_small_unlock();
+
     return ptr;
 }
 
 void* dam_small_realloc(void* ptr, size_t size) {
     size_class_header_t* header = get_size_class_header(ptr);
-    // size_class_t* size_class = &size_classes[header->size_class_index];
     uint8_t current_index = header->size_class_index;
 
-    // Stays within small
-    void * new_ptr;
-    if (size <= DAM_SMALL_MAX) {
-        //case A requested class aligns to same as current
-        uint8_t requested_index = size_to_class(size);
-        if (requested_index <= current_index) {
-            return ptr;
-        }
-
-        new_ptr = dam_small_malloc(size);
-        if (!new_ptr) return NULL;
-
+    // Check if cross layer before locking
+    if (size > DAM_SMALL_MAX) {
         size_t copy_size = size_classes[current_index].block_size;
-        memcpy(new_ptr, ptr, copy_size);
-        dam_small_free(ptr);
+
+        void* new_ptr = dam_malloc(size); // Locks accounted for.
+        if (new_ptr) {
+            memcpy(new_ptr, ptr, copy_size);
+            dam_free(ptr);
+        }
         return new_ptr;
     }
 
-    // case 2: Grows beyond small
-    new_ptr = dam_malloc(size);
-    if (!new_ptr) return NULL;
+    dam_small_lock();
 
-    size_t copy_size = size_classes[current_index].block_size;
-    memcpy(new_ptr, ptr, copy_size);
-    dam_free(ptr);
+    // Not shrink on purpose
+    uint8_t requested_index = size_to_class(size);
+    if (requested_index <= current_index) {
+        dam_small_unlock();
+        return ptr;
+    }
 
+    // Grow
+    void* new_ptr = dam_small_malloc_internal(size);
+    if (new_ptr) {
+        size_t copy_size = size_classes[current_index].block_size;
+        memcpy(new_ptr, ptr, copy_size);
+        dam_small_free_internal(ptr);
+    }
+
+    dam_small_unlock();
     return new_ptr;
 }
 
-void dam_small_free(void* ptr) {
+void dam_small_free_internal(void* ptr) {
     size_class_header_t* header = (size_class_header_t*)ptr - 1;
 
     // Double free checks
@@ -210,6 +222,41 @@ void dam_small_free(void* ptr) {
     DAM_LOG("[FREE] Pointer %p freed", ptr);
 }
 
+void dam_small_free(void* ptr) {
+    size_class_header_t* header = get_size_class_header(ptr);
+    uint8_t class = header->size_class_index;
+
+    // Attempt fast path.
+    thread_cache_t* tc = dam_get_thread_cache();
+    if (tc && tc->bins[class].count < THREAD_CACHE_MAX_BLOCKS_PER_CLASS) {
+
+        header->is_free = 1;
+        header->magic = FREED_MAGIC;
+        header->next = tc->bins[class].free_list;
+        tc->bins[class].free_list = header;
+        tc->bins[class].count++;
+        tc->deallocations++;
+
+        DAM_LOG("[TCACHE] Cached block %p (class=%u, cached=%zu/%d)",
+                ptr, class, tc->bins[class].count, THREAD_CACHE_MAX_BLOCKS_PER_CLASS);
+
+        return;
+    }
+
+    // Slow path/Cache full
+    DAM_LOG("[TCACHE FULL] class=%u, returning %p to central", class, ptr);
+
+    dam_small_lock();
+    dam_small_free_internal(ptr);
+    dam_small_unlock();
+}
+
 size_class_header_t* get_size_class_header(void* ptr) {
     return (size_class_header_t*)ptr - 1;
+}
+
+void dam_small_free_to_central(void* ptr) {
+    dam_small_lock();
+    dam_small_free_internal(ptr);
+    dam_small_unlock();
 }

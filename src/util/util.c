@@ -1,13 +1,17 @@
 #include <assert.h>
 #include <unistd.h>
 
+#include "dam/dam.h"
 #include "dam/dam_config.h"
 #include "dam/dam_log.h"
+#include "dam/internal/thread.h"
 
 typedef struct pool_header pool_header_t;
 /*********************
  * Helper Functions *
  *********************/
+
+
 
 size_t align_up(size_t size, size_t alignment) {
     return (size + alignment - 1) & ~(alignment - 1);
@@ -53,6 +57,30 @@ pool_header_t* dam_pool_from_ptr(void* address) {
     return NULL;
 }
 
+/**********************
+ * internal Functions *
+ **********************/
+void init_allocator_unlocked(void) {
+    if (initialized) {
+        return;
+    }
+    if (!verify_page_size()) {
+        return;
+    }
+
+    DAM_LOG("[INIT] Initializing multi-threading...");
+    dam_thread_init();
+
+    DAM_LOG("[INIT] Initializing size class allocator...");
+    dam_small_init();
+    DAM_LOG("[INIT] Initializing growing pool allocator...");
+    dam_general_init();
+    DAM_LOG("[INIT] Initializing direct mmap() allocator...");
+    dam_direct_init();
+
+    initialized = 1;
+    DAM_LOG("[INIT] Allocator initialized");
+}
 
 void print_allocator_stats(void) {
     DAM_LOG("\n=== Allocator Statistics ===");
@@ -76,5 +104,4 @@ void reset_allocator_stats(void) {
     stats.blocks_searched = 0;
     stats.splits = 0;
     stats.coalesces = 0;
-    // Don't reset pools_created - that's structural info
 }
