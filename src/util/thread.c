@@ -86,7 +86,6 @@ thread_cache_t* dam_get_thread_cache(void) {
 
     memset(thread_cache, 0, sizeof(thread_cache_t));
 
-    thread_cache = calloc(1, sizeof(thread_cache_t));
     if (!thread_cache) {
         DAM_LOG_ERROR("[TCACHE] Failed to allocate thread cache");
         return NULL;
