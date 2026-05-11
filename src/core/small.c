@@ -252,7 +252,7 @@ void dam_small_free(void* ptr) {
     dam_small_unlock();
 }
 
-size_class_header_t* get_size_class_header(void* ptr) {
+inline size_class_header_t* get_size_class_header(void* ptr) {
     return (size_class_header_t*)((char*)ptr - SIZE_CLASS_HEADER_SIZE);
 }
 
