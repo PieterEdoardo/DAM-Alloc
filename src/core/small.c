@@ -84,6 +84,12 @@ static pool_header_t* create_small_pool(uint8_t class_index) {
 
         cursor += block_stride;
     }
+
+    if (free_class_list) {
+        size_class_header_t* tail = free_class_list;
+        while (tail->next) tail = tail->next;
+        tail->next = size_classes[class_index].free_class_list;
+    }
     size_classes[class_index].free_class_list = free_class_list;
 
     stats.pools_created++;
@@ -238,8 +244,7 @@ void dam_small_free(void* ptr) {
         tc->bins[class].count++;
         tc->deallocations++;
 
-        DAM_LOG("[TCACHE] Cached block %p (class=%u, cached=%zu/%d)",
-                ptr, class, tc->bins[class].count, THREAD_CACHE_MAX_BLOCKS_PER_CLASS);
+        DAM_LOG("[TCACHE] Cached block %p (class=%u, cached=%zu/%d)", ptr, class, tc->bins[class].count, THREAD_CACHE_MAX_BLOCKS_PER_CLASS);
 
         return;
     }
