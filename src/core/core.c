@@ -46,16 +46,19 @@ int dam_init(void) {
     return 0;
 }
 
+
+/**********************************************************
+* DAM allocator (core)
+*
+* Memory Allocation suite
+***********************************************************/
 void* dam_malloc(size_t size) {
 
     if (!initialized) dam_init();
 
     if (size == 0) return NULL;
-
     if (size <= DAM_SMALL_MAX) return dam_small_malloc(size);
-
     if (size <= DAM_GENERAL_MAX) return dam_general_malloc(size);
-
     return dam_direct_malloc(size);
 }
 
@@ -75,13 +78,13 @@ void* dam_realloc(void* ptr, size_t size) {
     }
 
     switch (pool->type) {
-        case DAM_POOL_SMALL:
+        case DAM_LAYER_SMALL:
             return dam_small_realloc(ptr, size);
 
-        case DAM_POOL_GENERAL:
+        case DAM_LAYER_GENERAL:
             return dam_general_realloc(ptr, size);
 
-        case DAM_POOL_DIRECT:
+        case DAM_LAYER_DIRECT:
             return dam_direct_realloc(ptr, size);
 
         default:
@@ -103,13 +106,13 @@ void dam_free(void* ptr) {
 
     DAM_LOG("[FREE] Pool type to be freed: %d", pool->type);
     switch (pool->type) {
-        case DAM_POOL_SMALL:
+        case DAM_LAYER_SMALL:
             dam_small_free(ptr);
             break;
-        case DAM_POOL_GENERAL:
+        case DAM_LAYER_GENERAL:
             dam_general_free(ptr, pool);
             break;
-        case DAM_POOL_DIRECT:
+        case DAM_LAYER_DIRECT:
             dam_direct_free(ptr);
             break;
         default:
@@ -118,4 +121,14 @@ void dam_free(void* ptr) {
     }
 }
 
-
+/**********************************************************
+* DAM allocator (core)
+*
+* Memory diagnostics and security suite
+***********************************************************/
+dam_layer_type_t dam_layer_for_size(size_t size) {
+    if (size == 0) return DAM_LAYER_ERROR;
+    if (size <= DAM_SMALL_MAX) return DAM_LAYER_SMALL;
+    if (size <= DAM_GENERAL_MAX) return DAM_LAYER_GENERAL;
+    return DAM_LAYER_DIRECT;
+}

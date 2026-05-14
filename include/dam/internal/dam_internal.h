@@ -8,10 +8,11 @@
  * Data Structures *
  *******************/
 typedef enum {
-    DAM_POOL_SMALL,
-    DAM_POOL_GENERAL,
-    DAM_POOL_DIRECT,
-} dam_pool_type_t;
+    DAM_LAYER_ERROR,
+    DAM_LAYER_SMALL,
+    DAM_LAYER_GENERAL,
+    DAM_LAYER_DIRECT,
+} dam_layer_type_t;
 
 typedef struct size_class_header {
     uint32_t magic;
@@ -33,7 +34,7 @@ typedef struct block_header {
 typedef struct pool_header {
     void* memory;
     size_t size;
-    dam_pool_type_t type;
+    dam_layer_type_t type;
     struct pool_header* next;
     block_header_t* free_block_list;
 } pool_header_t;

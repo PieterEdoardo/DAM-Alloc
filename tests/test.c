@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <assert.h>
+#include <unistd.h>
 
 #include "dam/dam.h"
 #include "dam/dam_log.h"
@@ -397,6 +398,7 @@ static void test_edge_sizes(void) {
 /* main                                                                 */
 /* ------------------------------------------------------------------ */
 int main(void) {
+    fprintf(stdout, "%lu\n", (unsigned long)time(NULL));
     srand((unsigned)time(NULL));
 
     printf("DAM Stress Test Suite\n");
@@ -412,5 +414,7 @@ int main(void) {
 
     printf("=====================\n");
     printf("ALL TESTS PASSED\n");
+    fprintf(stdout, "%lu\n", (unsigned long)time(NULL));
+
     return 0;
 }
