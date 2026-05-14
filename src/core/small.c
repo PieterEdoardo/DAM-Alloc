@@ -59,7 +59,7 @@ static pool_header_t* create_small_pool(uint8_t class_index) {
     pool_header_t* new_pool = memory;
     new_pool->memory = memory;
     new_pool->size = pool_size;
-    new_pool->type = DAM_POOL_SMALL;
+    new_pool->type = DAM_LAYER_SMALL;
 
     dam_register_pool(new_pool);
 

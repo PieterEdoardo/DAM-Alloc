@@ -248,7 +248,7 @@ pool_header_t* create_general_pool(size_t min_size) {
     pool_header_t* new_pool = memory;
     new_pool->memory = memory;
     new_pool->size = pool_size;
-    new_pool->type = DAM_POOL_GENERAL;
+    new_pool->type = DAM_LAYER_GENERAL;
     new_pool->free_block_list = (block_header_t*)((char*)memory + POOL_GENERAL_SIZE);
 
     char* usable_start = (char*)memory + POOL_GENERAL_SIZE;

@@ -26,7 +26,7 @@ void* dam_direct_malloc_internal(size_t size) {
         return NULL;
 
     pool_header_t* pool_header = memory;
-    pool_header->type = DAM_POOL_DIRECT;
+    pool_header->type = DAM_LAYER_DIRECT;
     pool_header->size = total;
     pool_header->memory = memory;
 
