@@ -28,7 +28,6 @@ void  dam_general_init() {
 }
 
 void* dam_general_malloc_internal(size_t size) {
-
     size_t aligned_size = align_up(size, ALIGNMENT);
     size_t actual_size = aligned_size + sizeof(uint32_t);
     actual_size = align_up(actual_size, ALIGNMENT);
@@ -74,11 +73,10 @@ void* dam_general_malloc_internal(size_t size) {
 }
 
 void dam_general_free_internal(void* ptr, pool_header_t* pool_header) {
-
-    block_header_t* header = (block_header_t*)((char*)ptr - BLOCK_HEADER_SIZE);
+    block_header_t* block_header = get_block_header(ptr);
 
     // Double free checks
-    if (header->magic == FREED_MAGIC) {
+    if (block_header->magic == FREED_MAGIC) {
         DAM_LOG_ERROR("[FREE] Double free detected at %p!", ptr);
         return;
     }
@@ -90,18 +88,18 @@ void dam_general_free_internal(void* ptr, pool_header_t* pool_header) {
     }
 
     // Invalid pointer checks
-    if (header->magic != BLOCK_MAGIC) {
+    if (block_header->magic != BLOCK_MAGIC) {
         DAM_LOG_ERROR("[FREE] Invalid pointer passed to dam_free: %p", ptr);
         return;
     }
 
     // Header sanity check
-    if (header->size == 0) {
+    if (block_header->size == 0) {
         DAM_LOG_ERROR("[FREE] Pointer passed to dam_free refers to header with invalid size: %p", ptr);
         return;
     }
 
-    unsigned int* end_canary = (unsigned int*)((char*)ptr + header->user_size);
+    unsigned int* end_canary = (unsigned int*)((char*)ptr + block_header->user_size);
     if (*end_canary != CANARY_VALUE) {
         DAM_LOG_ERROR("[CANARY][FREE] Buffer overflow detected at %p! Canary was 0x%X, expected 0x%X",ptr, *end_canary, CANARY_VALUE);
         // Continue to free, but user knows there was corruption.
@@ -109,10 +107,10 @@ void dam_general_free_internal(void* ptr, pool_header_t* pool_header) {
         DAM_LOG("[CANARY][FREE] Buffer overflow check passed");
     }
 
-    header->magic = FREED_MAGIC;
-    header->is_free = 1;
+    block_header->magic = FREED_MAGIC;
+    block_header->is_free = 1;
 
-    coalesce_if_possible(header, pool_header);
+    coalesce_if_possible(block_header, pool_header);
     stats.frees++;
     DAM_LOG("[FREE] Pointer %p freed", ptr);
 }
@@ -132,50 +130,50 @@ void dam_general_free(void* ptr, pool_header_t* pool_header) {
 }
 
 void* dam_general_realloc(void* ptr, size_t size) {
-    block_header_t* header = (block_header_t*)((char*)ptr - BLOCK_HEADER_SIZE);
+    block_header_t* block_header = get_block_header(ptr);
     size_t new_actual_size = align_up(size + sizeof(uint32_t), ALIGNMENT);
 
     dam_general_lock();
 
-    if (header->magic != BLOCK_MAGIC) {
+    if (block_header->magic != BLOCK_MAGIC) {
         DAM_LOG_ERROR("Invalid pointer passed to dam_general_realloc:%p", ptr);
         return NULL;
     }
 
     // Case 1 Shrink in place
-    if (header->size >= new_actual_size) {
+    if (block_header->size >= new_actual_size) {
 
-        header->user_size = size;
+        block_header->user_size = size;
         uint32_t* end_canary = (uint32_t*)((char*)ptr + size);
         *end_canary = CANARY_VALUE;
 
-        split_block_if_possible(header, new_actual_size);
+        split_block_if_possible(block_header, new_actual_size);
 
         dam_general_unlock();
         return ptr;
     }
 
     // Case 2 grow in-place if next block is free
-    if (header->next && header->next->is_free) {
-        size_t available_space = header->size + BLOCK_HEADER_SIZE + header->next->size;
+    if (block_header->next && block_header->next->is_free) {
+        size_t available_space = block_header->size + BLOCK_HEADER_SIZE + block_header->next->size;
 
         if (available_space >= new_actual_size) {
 
-            block_header_t* old_next = header->next;
-            header->size = available_space;
-            header->next = old_next->next;
+            block_header_t* old_next = block_header->next;
+            block_header->size = available_space;
+            block_header->next = old_next->next;
 
             old_next->magic = 0;
             old_next->next = NULL;
             old_next->prev = NULL;
 
-            if (header->next) header->next->prev = header;
+            if (block_header->next) block_header->next->prev = block_header;
 
-            header->user_size = size;
+            block_header->user_size = size;
             uint32_t* end_canary = (uint32_t*)((char*)ptr + size);
             *end_canary = CANARY_VALUE;
 
-            split_block_if_possible(header, new_actual_size);
+            split_block_if_possible(block_header, new_actual_size);
             stats.coalesces++;
 
             dam_general_unlock();
@@ -187,7 +185,7 @@ void* dam_general_realloc(void* ptr, size_t size) {
     dam_general_unlock();
     void* new_ptr = dam_malloc(size);
     if (new_ptr) {
-        size_t copy_size = (header->user_size < size) ? header->user_size : size;
+        size_t copy_size = (block_header->user_size < size) ? block_header->user_size : size;
         memcpy(new_ptr, ptr, copy_size);
         dam_free(ptr);
     }
@@ -316,17 +314,19 @@ void split_block_if_possible(block_header_t* block_header, size_t actual_size) {
 
 void coalesce_if_possible(block_header_t* block_header, pool_header_t* pool_header) {
     // Coalesce with previous block if it's free
-    if (block_header->prev && block_header->prev->is_free) {
+    if (block_header->prev && block_header->prev->is_free && block_header->prev->magic == FREED_MAGIC) {
         DAM_LOG("[COALESCE] Merging with previous block: %zu + %zu", block_header->prev->size, block_header->size);
         block_header->prev->size += BLOCK_HEADER_SIZE + block_header->size;
         block_header->prev->next = block_header->next;
         stats.coalesces++;
 
         if (block_header->next) block_header->next->prev = block_header->prev;
+
+        block_header = block_header->prev;
     }
 
     // Coalesce with next block if it's free
-    if (block_header->next && block_header->next->is_free) {
+    if (block_header->next && block_header->next->is_free && block_header->next->magic == FREED_MAGIC) {
         if ((void*)block_header->next >= pool_header->memory && (char*)block_header->next < (char*)pool_header->memory + pool_header->size) {
             DAM_LOG("[COALESCE] Merging with next block: %zu + %zu", block_header->size, block_header->next->size);
             block_header->size += BLOCK_HEADER_SIZE + block_header->next->size;
@@ -372,6 +372,6 @@ void cleanup_allocator(void) {
     stats.pools_created = 0;
 }
 
-block_header_t* get_block_header(void* ptr) {
+inline block_header_t* get_block_header(void* ptr) {
     return (block_header_t*)((char*)ptr - BLOCK_HEADER_SIZE);
 }

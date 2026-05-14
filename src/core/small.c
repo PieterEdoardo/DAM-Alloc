@@ -84,6 +84,12 @@ static pool_header_t* create_small_pool(uint8_t class_index) {
 
         cursor += block_stride;
     }
+
+    if (free_class_list) {
+        size_class_header_t* tail = free_class_list;
+        while (tail->next) tail = tail->next;
+        tail->next = size_classes[class_index].free_class_list;
+    }
     size_classes[class_index].free_class_list = free_class_list;
 
     stats.pools_created++;
@@ -119,6 +125,7 @@ void* dam_small_malloc_internal(size_t size) {
 
     block->is_free = 0;
     block->magic = BLOCK_MAGIC;
+    // block->next = NULL;
 
     void* ptr = (char*)block + SIZE_CLASS_HEADER_SIZE;
 
@@ -198,7 +205,7 @@ void* dam_small_realloc(void* ptr, size_t size) {
 }
 
 void dam_small_free_internal(void* ptr) {
-    size_class_header_t* header = (size_class_header_t*)ptr - 1;
+    size_class_header_t* header = get_size_class_header(ptr);
 
     // Double free checks
     if (header->magic == FREED_MAGIC) {
@@ -237,8 +244,7 @@ void dam_small_free(void* ptr) {
         tc->bins[class].count++;
         tc->deallocations++;
 
-        DAM_LOG("[TCACHE] Cached block %p (class=%u, cached=%zu/%d)",
-                ptr, class, tc->bins[class].count, THREAD_CACHE_MAX_BLOCKS_PER_CLASS);
+        DAM_LOG("[TCACHE] Cached block %p (class=%u, cached=%zu/%d)", ptr, class, tc->bins[class].count, THREAD_CACHE_MAX_BLOCKS_PER_CLASS);
 
         return;
     }
@@ -251,8 +257,8 @@ void dam_small_free(void* ptr) {
     dam_small_unlock();
 }
 
-size_class_header_t* get_size_class_header(void* ptr) {
-    return (size_class_header_t*)ptr - 1;
+inline size_class_header_t* get_size_class_header(void* ptr) {
+    return (size_class_header_t*)((char*)ptr - SIZE_CLASS_HEADER_SIZE);
 }
 
 void dam_small_free_to_central(void* ptr) {

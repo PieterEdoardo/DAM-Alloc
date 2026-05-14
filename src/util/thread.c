@@ -32,18 +32,18 @@ void dam_thread_init(void) {
     dam_lock_initialized = 1;
 }
 
-void dam_small_lock(void) { pthread_mutex_lock(&small_lock); }
-void dam_small_unlock(void) { pthread_mutex_unlock(&small_lock); }
+inline void dam_small_lock(void) { pthread_mutex_lock(&small_lock); }
+inline void dam_small_unlock(void) { pthread_mutex_unlock(&small_lock); }
 
-void dam_general_lock(void) { pthread_mutex_lock(&general_lock); }
-void dam_general_unlock(void) { pthread_mutex_unlock(&general_lock); }
+inline void dam_general_lock(void) { pthread_mutex_lock(&general_lock); }
+inline void dam_general_unlock(void) { pthread_mutex_unlock(&general_lock); }
 
-void dam_direct_lock(void) { pthread_mutex_lock(&direct_lock); }
-void dam_direct_unlock(void) { pthread_mutex_unlock(&direct_lock); }
+inline void dam_direct_lock(void) { pthread_mutex_lock(&direct_lock); }
+inline void dam_direct_unlock(void) { pthread_mutex_unlock(&direct_lock); }
 
 static void thread_cache_destructor(void* cache_ptr) {
     if (!cache_ptr) return;
-    thread_cache_t* tc = (thread_cache_t*)cache_ptr;
+    thread_cache_t* tc = cache_ptr;
 
     DAM_LOG("[TCACHE] Thread %lu exiting, flushing %lu allocations back to central",
         pthread_self(), tc->allocations);

@@ -10,7 +10,7 @@
  * Build configuration              *
  * ================================ */
 #ifndef DAM_DEBUG
-#define DAM_DEBUG 1
+#define DAM_DEBUG 0
 #endif
 
 #ifndef DAM_DEBUG_ERROR
