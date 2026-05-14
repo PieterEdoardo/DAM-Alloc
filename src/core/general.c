@@ -321,6 +321,8 @@ void coalesce_if_possible(block_header_t* block_header, pool_header_t* pool_head
         stats.coalesces++;
 
         if (block_header->next) block_header->next->prev = block_header->prev;
+
+        block_header = block_header->prev;
     }
 
     // Coalesce with next block if it's free
