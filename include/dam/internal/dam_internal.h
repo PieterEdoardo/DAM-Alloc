@@ -35,6 +35,7 @@ typedef struct pool_header {
     void* memory;
     size_t size;
     dam_layer_type_t type;
+    uint8_t read_only;
     struct pool_header* next;
     block_header_t* free_block_list;
 } pool_header_t;
@@ -54,20 +55,43 @@ static struct {
     size_t pools_created;
 } stats = {0};
 
+typedef struct {
+    size_t tlc_used;
+    size_t tlc_free;
+    size_t size_classes;
+    size_t classes_used;
+    size_t classes_free;
+    size_t classes_bytes_used;
+    size_t classes_bytes_free;
+    size_t pools_active;
+    size_t blocks_used;
+    size_t block_bytes_used;
+    size_t block_bytes_free;
+    size_t quarantined_pools;
+    size_t direct_allocations;
+} dam_snapshot_t;
+
 typedef struct block_header block_header_t;
 typedef struct pool_header pool_header_t;
 
 extern pool_header_t* dam_pool_list;
 extern int initialized;
 
-// core internals
+// Core internals
 void init_allocator(void);
 void init_allocator_unlocked(void);
 void* dam_malloc_internal(size_t size);
 void dam_free_internal(void* ptr);
 void* dam_realloc_internal(void* ptr, size_t size);
 
-/* helpers */
+// Diagnostic API
+void dam_snapshot(dam_snapshot_t* snapshot);
+void dam_snapshot_small(dam_snapshot_t* snapshot);
+void dam_snapshot_general(dam_snapshot_t* snapshot);
+void dam_snapshot_direct(dam_snapshot_t* snapshot);
+dam_layer_type_t dam_layer_for_size(size_t size);
+
+/* Helpers */
 void dam_register_pool(pool_header_t* new_pool_header);
 void dam_unregister_pool(pool_header_t* pool_header);
 pool_header_t* create_general_pool(size_t min_size);

@@ -126,6 +126,13 @@ void dam_free(void* ptr) {
 *
 * Memory diagnostics and security suite
 ***********************************************************/
+
+void dam_snapshot(dam_snapshot_t* snapshot) {
+    dam_snapshot_small(snapshot);
+    dam_snapshot_general(snapshot);
+    dam_snapshot_direct(snapshot);
+}
+
 dam_layer_type_t dam_layer_for_size(size_t size) {
     if (size == 0) return DAM_LAYER_ERROR;
     if (size <= DAM_SMALL_MAX) return DAM_LAYER_SMALL;
