@@ -20,7 +20,7 @@ typedef struct {
 } thread_cache_bin_t;
 
 typedef struct {
-    thread_cache_bin_t bins[4];
+    thread_cache_bin_t bins[DAM_SIZE_CLASS_COUNT];
     uint64_t allocations;
     uint64_t deallocations;
 } thread_cache_t;

@@ -125,7 +125,6 @@ void* dam_small_malloc_internal(size_t size) {
 
     block->is_free = 0;
     block->magic = BLOCK_MAGIC;
-    // block->next = NULL;
 
     void* ptr = (char*)block + SIZE_CLASS_HEADER_SIZE;
 
@@ -153,8 +152,7 @@ void* dam_small_malloc(size_t size) {
         stats.allocations++;
 
         void* ptr = (char*)block + SIZE_CLASS_HEADER_SIZE;
-        DAM_LOG("[TCACHE HIT] Returning %p from tcache (class=%u, remaining=%zu)",
-                ptr, class, tc->bins[class].count);
+        DAM_LOG("[TCACHE HIT] Returning %p from tcache (class=%u, remaining=%zu)", ptr, class, tc->bins[class].count);
 
         return ptr;
     }
@@ -264,5 +262,16 @@ inline size_class_header_t* get_size_class_header(void* ptr) {
 void dam_small_free_to_central(void* ptr) {
     dam_small_lock();
     dam_small_free_internal(ptr);
+    dam_small_unlock();
+}
+
+void dam_snapshot_small(dam_snapshot_t* snapshot) {
+    dam_small_lock();
+    thread_cache_t* tlc = dam_get_thread_cache();
+    for (size_t class = 0; class < DAM_SIZE_CLASS_COUNT; class++) {
+        snapshot->tlc_used += tlc->bins[class].count;
+    }
+    snapshot->tlc_free = snapshot->tlc_used / THREAD_CACHE_MAX_BLOCKS_PER_CLASS;
+    snapshot->size_classes = DAM_SIZE_CLASS_COUNT;
     dam_small_unlock();
 }

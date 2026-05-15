@@ -95,6 +95,11 @@ void* dam_direct_realloc(void* ptr, size_t size) {
     return ptr;
 }
 
+void dam_snapshot_direct(dam_snapshot_t* snapshot) {
+
+}
+
+
 pool_header_t* direct_pool_from_ptr(void* ptr) {
     return (pool_header_t*)((char*)ptr - sizeof(block_header_t) - sizeof(pool_header_t));
 }

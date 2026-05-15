@@ -372,6 +372,10 @@ void cleanup_allocator(void) {
     stats.pools_created = 0;
 }
 
+void dam_snapshot_general(dam_snapshot_t* snapshot) {
+
+}
+
 inline block_header_t* get_block_header(void* ptr) {
     return (block_header_t*)((char*)ptr - BLOCK_HEADER_SIZE);
 }
