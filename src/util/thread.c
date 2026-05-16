@@ -1,5 +1,3 @@
-#include "dam/internal/thread.h"
-
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -98,7 +96,11 @@ thread_cache_t* dam_get_thread_cache(void) {
     return thread_cache;
 }
 
-void dam_thread_cache_destroy(void ) {
+inline thread_cache_t* dam_get_current_thread_cache(void) {
+    return thread_cache;
+}
+
+void dam_thread_cache_destroy(void) {
     if (thread_cache) {
         thread_cache_destructor(thread_cache);
         thread_cache = NULL;

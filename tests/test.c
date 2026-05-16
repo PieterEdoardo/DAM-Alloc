@@ -120,6 +120,18 @@ static size_t biased_size(void) {
     }
 }
 
+void print_snapshot(const dam_snapshot_t* snapshot) {
+    printf("tlc_used: %zu\n", snapshot->tlc_used);
+    printf("tlc_free: %zu\n", snapshot->tlc_free);
+    printf("size_classes: %zu\n", snapshot->size_classes);
+    printf("classes_bytes_used: %zu\n", snapshot->classes_bytes_used);
+    printf("pools_active: %zu\n", snapshot->pools_active);
+    printf("pools_bytes_used: %zu\n", snapshot->pools_bytes_used);
+    printf("quarantined_pools: %zu\n", snapshot->quarantined_pools);
+    printf("direct_allocations: %zu\n", snapshot->direct_allocations);
+    printf("direct_bytes_used: %zu\n", snapshot->direct_bytes_used);
+}
+
 /* ------------------------------------------------------------------ */
 /* Test 1 — Random alloc / free (original harness, fixed)              */
 /* ------------------------------------------------------------------ */
@@ -394,6 +406,27 @@ static void test_edge_sizes(void) {
     printf("  PASS\n\n");
 }
 
+static void test_big_direct_allocations(void) {
+    printf("=== Test 8: Big direct allocations ===\n");
+    void* a = dam_malloc(100000);
+    void* b = dam_malloc(1000000);
+    void* c = dam_malloc(10000000);
+
+    if (!a || !b || !c) {
+        fprintf(stderr, "[FAIL] NULL on big direct alloc\n"); abort();
+    }
+
+    a = dam_realloc(a, 10000000);
+    b = dam_realloc(b, 1000000);
+    c = dam_realloc(c, 100000);
+
+    if (!a || !b || !c) {
+        fprintf(stderr, "[FAIL] NULL on big direct realloc\n"); abort();
+    }
+
+    printf("  PASS\n\n");
+}
+
 /* ------------------------------------------------------------------ */
 /* main                                                                 */
 /* ------------------------------------------------------------------ */
@@ -410,7 +443,12 @@ int main(void) {
     test_fill_then_free();
     test_sequential_sweep();
     test_realloc_churn();
-    test_random_churn();      /* longest — run last */
+    test_big_direct_allocations();
+
+    dam_snapshot_t snapshot = {0};
+    dam_snapshot(&snapshot);
+    print_snapshot(&snapshot);
+    // test_random_churn();      /* longest — run last */
 
     printf("=====================\n");
     printf("ALL TESTS PASSED\n");

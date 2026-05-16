@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
+#include "internal/dam_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -24,10 +26,9 @@ int   dam_init(void);
 void  dam_shutdown(void);
 
 /* ================================
- * Stats
+ * Diagnostics API
  * ================================ */
-
-#include "dam_stats.h"
+void dam_snapshot(dam_snapshot_t* snapshot);
 
 #ifdef __cplusplus
 }

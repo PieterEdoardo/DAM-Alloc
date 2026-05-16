@@ -1,19 +1,16 @@
 #include <assert.h>
 #include <unistd.h>
 
-#include "dam/dam.h"
 #include "dam/dam_config.h"
 #include "dam/dam_log.h"
-#include "dam/internal/thread.h"
+#include "dam/internal/dam_internal.h"
 
 typedef struct pool_header pool_header_t;
 /*********************
  * Helper Functions *
  *********************/
 
-
-
-size_t align_up(size_t size, size_t alignment) {
+inline size_t align_up(size_t size, size_t alignment) {
     return (size + alignment - 1) & ~(alignment - 1);
 }
 

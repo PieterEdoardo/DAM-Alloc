@@ -5,7 +5,7 @@
 #include "dam/dam.h"
 #include "dam/dam_config.h"
 #include "dam/dam_log.h"
-#include "dam/internal/thread.h"
+#include "dam/internal/dam_internal.h"
 
 
 /**********************************************************
@@ -266,12 +266,20 @@ void dam_small_free_to_central(void* ptr) {
 }
 
 void dam_snapshot_small(dam_snapshot_t* snapshot) {
-    dam_small_lock();
-    thread_cache_t* tlc = dam_get_thread_cache();
+    thread_cache_t* tlc = dam_get_current_thread_cache();
     for (size_t class = 0; class < DAM_SIZE_CLASS_COUNT; class++) {
         snapshot->tlc_used += tlc->bins[class].count;
     }
-    snapshot->tlc_free = snapshot->tlc_used / THREAD_CACHE_MAX_BLOCKS_PER_CLASS;
+    snapshot->tlc_free = (DAM_SIZE_CLASS_COUNT * THREAD_CACHE_MAX_BLOCKS_PER_CLASS) - snapshot->tlc_used;
     snapshot->size_classes = DAM_SIZE_CLASS_COUNT;
+    pool_header_t* current = dam_pool_list;
+    dam_small_lock();
+    while (current) {
+        if (current->type == DAM_LAYER_SMALL) {
+            snapshot->classes_bytes_used += current->size;
+        }
+        current = current->next;
+    }
+
     dam_small_unlock();
 }

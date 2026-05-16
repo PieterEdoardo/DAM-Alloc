@@ -96,7 +96,16 @@ void* dam_direct_realloc(void* ptr, size_t size) {
 }
 
 void dam_snapshot_direct(dam_snapshot_t* snapshot) {
-
+    pool_header_t* current = dam_pool_list;
+    dam_direct_lock();
+    while (current) {
+        if (current->type == DAM_LAYER_DIRECT) {
+            snapshot->direct_allocations++;
+            snapshot->direct_bytes_used += current->size;
+        }
+        current = current->next;
+    }
+    dam_direct_unlock();
 }
 
 

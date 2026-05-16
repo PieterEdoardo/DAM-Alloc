@@ -3,7 +3,6 @@
 #include "dam/dam.h"
 #include "dam/dam_config.h"
 #include "dam/internal/dam_internal.h"
-#include "dam/internal/thread.h"
 #include "dam/dam_log.h"
 
 /**********************************************************

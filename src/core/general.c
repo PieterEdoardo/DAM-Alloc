@@ -8,6 +8,7 @@
 #include "dam/dam_config.h"
 #include "dam/dam_log.h"
 #include "dam/internal/dam_internal.h"
+#include "dam/internal/dam_types.h"
 
 /**********************************************************
  * General allocator
@@ -373,7 +374,19 @@ void cleanup_allocator(void) {
 }
 
 void dam_snapshot_general(dam_snapshot_t* snapshot) {
+    pool_header_t* current = dam_pool_list;
+    dam_general_lock();
 
+    while (current) {
+        if (current->type == DAM_LAYER_GENERAL) {
+            snapshot->pools_bytes_used += current->size;
+            snapshot->pools_active++;
+            if (current->read_only) snapshot->quarantined_pools++;
+        }
+        current = current->next;
+    }
+
+    dam_general_unlock();
 }
 
 inline block_header_t* get_block_header(void* ptr) {
