@@ -23,6 +23,7 @@ void dam_snapshot_small(dam_snapshot_t* snapshot);
 void dam_snapshot_general(dam_snapshot_t* snapshot);
 void dam_snapshot_direct(dam_snapshot_t* snapshot);
 dam_layer_type_t dam_layer_for_size(size_t size);
+void dam_general_fragmentation(pool_header_t* pool, dam_pool_snapshot_t* snapshot);
 
 /* Helpers */
 void dam_register_pool(pool_header_t* new_pool_header);

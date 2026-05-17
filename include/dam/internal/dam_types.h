@@ -78,5 +78,12 @@ typedef struct {
     size_t direct_bytes_used;
 } dam_snapshot_t;
 
+typedef struct {
+    size_t used;
+    size_t free;
+    size_t largest_free;
+    float fragmentation;
+} dam_pool_snapshot_t;
+
 extern pool_header_t* dam_pool_list;
 extern int initialized;

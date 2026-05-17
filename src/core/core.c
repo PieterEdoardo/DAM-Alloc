@@ -138,3 +138,39 @@ dam_layer_type_t dam_layer_for_size(size_t size) {
     if (size <= DAM_GENERAL_MAX) return DAM_LAYER_GENERAL;
     return DAM_LAYER_DIRECT;
 }
+
+/*
+ * 1.0 is no fragmentation and 0.0 is maximum.
+ * 0.0 would also happen if all pools are perfectly filled up.
+ * Fragmentation only pertains to general pools.
+ * n > DAM_SMALL_MAX && n <= DAM_GENERAL_MAX
+ * Other layers don't experience fragmentation in the traditional sense.
+ * Usage example:
+ * size_t pool_count = dam_pool_count();
+ * dam_pool_snapshot_t buffer[pool_count];
+ * size_t count = dam_general_pool_snapshots(buffer, pool_count);
+ * */
+size_t dam_fragmentation(dam_pool_snapshot_t* snapshot_buffer, size_t capacity) {
+    pool_header_t* current = dam_pool_list;
+    size_t count = 0;
+    while (current) {
+        if (current->type == DAM_LAYER_GENERAL && count < capacity) {
+            dam_general_fragmentation(current, &snapshot_buffer[count]);
+            count++;
+        }
+        current = current->next;
+    }
+
+    return count;
+}
+
+size_t dam_pool_count() {
+    pool_header_t* current = dam_pool_list;
+    size_t count = 0;
+    while (current) {
+        if (current->type == DAM_LAYER_GENERAL) count++;
+        current = current->next;
+    }
+
+    return count;
+}

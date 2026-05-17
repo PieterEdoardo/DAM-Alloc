@@ -95,7 +95,7 @@ void* dam_direct_realloc(void* ptr, size_t size) {
     return ptr;
 }
 
-void dam_snapshot_direct(dam_snapshot_t* snapshot) {
+void dam_snapshot_direct(dam_snapshot_t* snapshot, size_t capacity) {
     pool_header_t* current = dam_pool_list;
     dam_direct_lock();
     while (current) {

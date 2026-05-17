@@ -20,8 +20,6 @@
  * Each pool manages its own blocks.
  **********************************************************/
 
-typedef struct pool_header pool_header_t;
-
 void  dam_general_init() {
     if (!create_general_pool(INITIAL_POOL_SIZE)) {
         DAM_LOG_ERROR("Failed to create initial pool");
@@ -391,4 +389,22 @@ void dam_snapshot_general(dam_snapshot_t* snapshot) {
 
 inline block_header_t* get_block_header(void* ptr) {
     return (block_header_t*)((char*)ptr - BLOCK_HEADER_SIZE);
+}
+// 1.0 - (largest_free_block / total_free_bytes)
+// Get the largest free block by iteration and saving the latest biggest one.
+// While doing that, addition all the bytes of free blocks.
+void dam_general_fragmentation(pool_header_t* pool, dam_pool_snapshot_t* snapshot) {
+    block_header_t* current = pool->free_block_list;
+    dam_general_lock();
+    while (current) {
+        if (current->is_free && current->magic == FREED_MAGIC) {
+            if (current->size > snapshot->largest_free) snapshot->largest_free = current->size;
+            snapshot->free += current->size;
+        } else {
+            snapshot->used += current->size;
+        }
+        current = current->next;
+    }
+    snapshot->fragmentation = (float)snapshot->largest_free / (float)snapshot->free;
+    dam_general_unlock();
 }
