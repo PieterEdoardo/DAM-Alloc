@@ -427,6 +427,12 @@ static void test_big_direct_allocations(void) {
     printf("  PASS\n\n");
 }
 
+static void test_fragmentation(void) {
+    size_t pool_count = dam_pool_count();
+    dam_pool_snapshot_t buffer[pool_count];
+    size_t count = dam_general_pool_snapshots(buffer, pool_count);
+}
+
 /* ------------------------------------------------------------------ */
 /* main                                                                 */
 /* ------------------------------------------------------------------ */

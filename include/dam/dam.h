@@ -15,6 +15,7 @@ extern "C" {
 
 void* dam_malloc(size_t size);
 void  dam_free(void* ptr);
+void  dam_uafree(void* ptr);
 void* dam_realloc(void* ptr, size_t size);
 void* dam_calloc(size_t nmemb, size_t size);
 
@@ -28,7 +29,11 @@ void  dam_shutdown(void);
 /* ================================
  * Diagnostics API
  * ================================ */
+dam_layer_type_t dam_layer_for_size(size_t size);
 void dam_snapshot(dam_snapshot_t* snapshot);
+size_t dam_fragmentation(dam_pool_snapshot_t* snapshot_buffer, size_t capacity);
+size_t dam_pool_count();
+uint8_t dam_validate_pointer(void* ptr);
 
 #ifdef __cplusplus
 }

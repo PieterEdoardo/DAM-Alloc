@@ -174,3 +174,50 @@ size_t dam_pool_count() {
 
     return count;
 }
+
+uint8_t dam_validate_pointer(void* ptr) {
+    if (!ptr) {
+        return 0;
+        DAM_LOG_ERROR("[VALIDATE] Pointer invalid: %p", ptr);
+    }
+
+    pool_header_t* pool = dam_pool_from_ptr(ptr);
+
+    if (!pool) {
+        DAM_LOG_ERROR("[VALIDATE] Pointer does not belong to DAM pool: %p", ptr);
+        return 0;
+    }
+
+    if (pool->read_only) DAM_LOG_ERROR("[VALIDATE] Pointer belongs to quarantined pool: %p", ptr);
+    if (!pool->size) DAM_LOG_ERROR("[VALIDATE] Pointer pool has no size: %p", ptr);
+
+    switch (pool->type) {
+        case DAM_LAYER_ERROR:
+            DAM_LOG_ERROR("[VALIDATE] Header layer type invalid: %p, give type: %d", ptr, pool->type);
+            break;
+        case DAM_LAYER_SMALL:
+            size_class_header_t* size_class = get_size_class_header(ptr);
+            if (!size_class) return 0;
+            if (!size_class->size_class_index) return 0;
+
+            if (!size_class->is_free) {
+                if (size_class->magic != SMALL_MAGIC) {
+                    DAM_LOG_ERR("[VALIDATE] Pointer size class magic does not match: %p, magic %d", ptr, SMALL_MAGIC);
+                }
+            } else {
+                DAM_LOG("[VALIDATE] Pointer size class is free: %p", ptr);
+                if (size_class->magic != FREED_MAGIC) {
+                    DAM_LOG_ERR("[VALIDATE] Pointer size class magic does not match: %p, magic %d", ptr, FREED_MAGIC);
+                }
+            }
+
+            return 1;
+        case DAM_LAYER_GENERAL:
+            block_header_t* header = get_block_header(ptr);
+
+            return 1;
+        case DAM_LAYER_DIRECT:
+            return 1;
+    }
+    return 1;
+}

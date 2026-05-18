@@ -344,7 +344,6 @@ void cleanup_allocator(void) {
     int pool_count = 0;
 
     while (current) {
-        pool_header_t* next = current->next;
 
         DAM_LOG("[CLEANUP] Freeing pool at %p (size: %zu)",
                current->memory, current->size);
@@ -354,7 +353,7 @@ void cleanup_allocator(void) {
         }
 
         pool_count++;
-        current = next;
+        current = current->next;
     }
 
     DAM_LOG("[CLEANUP] Freed %d pools", pool_count);
@@ -369,6 +368,10 @@ void cleanup_allocator(void) {
     stats.splits = 0;
     stats.coalesces = 0;
     stats.pools_created = 0;
+}
+
+inline block_header_t* get_block_header(void* ptr) {
+    return (block_header_t*)((char*)ptr - BLOCK_HEADER_SIZE);
 }
 
 void dam_snapshot_general(dam_snapshot_t* snapshot) {
@@ -387,9 +390,6 @@ void dam_snapshot_general(dam_snapshot_t* snapshot) {
     dam_general_unlock();
 }
 
-inline block_header_t* get_block_header(void* ptr) {
-    return (block_header_t*)((char*)ptr - BLOCK_HEADER_SIZE);
-}
 // 1.0 - (largest_free_block / total_free_bytes)
 // Get the largest free block by iteration and saving the latest biggest one.
 // While doing that, addition all the bytes of free blocks.
