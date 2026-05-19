@@ -174,50 +174,63 @@ size_t dam_pool_count() {
 
     return count;
 }
-
-uint8_t dam_validate_pointer(void* ptr) {
+/*
+ * Expensive function that checks metadata integrity of pointer. Does some required pool metadata testing as well.
+ * Second argument is set to a non 0 number it will place the associated pool in quarantine.
+ */
+uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine) {
     if (!ptr) {
-        return 0;
-        DAM_LOG_ERROR("[VALIDATE] Pointer invalid: %p", ptr);
-    }
-
-    pool_header_t* pool = dam_pool_from_ptr(ptr);
-
-    if (!pool) {
-        DAM_LOG_ERROR("[VALIDATE] Pointer does not belong to DAM pool: %p", ptr);
+        DAM_LOG_VALID_ERROR("[VALIDATE] Pointer invalid: %p", ptr);
         return 0;
     }
 
-    if (pool->read_only) DAM_LOG_ERROR("[VALIDATE] Pointer belongs to quarantined pool: %p", ptr);
-    if (!pool->size) DAM_LOG_ERROR("[VALIDATE] Pointer pool has no size: %p", ptr);
+    pool_header_t* pool_header = dam_pool_from_ptr(ptr);
 
-    switch (pool->type) {
+    if (!pool_header) {
+        DAM_LOG_VALID_ERROR("[VALIDATE] Pointer does not belong to DAM pool: %p", ptr);
+        return 0;
+    }
+
+    if (pool_header->read_only) DAM_LOG_VALID("[VALIDATE] Pointer belongs to quarantined pool: %p", ptr);
+    if (!pool_header->size) DAM_LOG_VALID("[VALIDATE] Pointer pool has no size: %p", ptr);
+
+    uint8_t result = 0;
+    switch (pool_header->type) {
         case DAM_LAYER_ERROR:
-            DAM_LOG_ERROR("[VALIDATE] Header layer type invalid: %p, give type: %d", ptr, pool->type);
+            DAM_LOG_VALID_ERROR("[VALIDATE] Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
             break;
         case DAM_LAYER_SMALL:
-            size_class_header_t* size_class = get_size_class_header(ptr);
-            if (!size_class) return 0;
-            if (!size_class->size_class_index) return 0;
-
-            if (!size_class->is_free) {
-                if (size_class->magic != SMALL_MAGIC) {
-                    DAM_LOG_ERR("[VALIDATE] Pointer size class magic does not match: %p, magic %d", ptr, SMALL_MAGIC);
-                }
-            } else {
-                DAM_LOG("[VALIDATE] Pointer size class is free: %p", ptr);
-                if (size_class->magic != FREED_MAGIC) {
-                    DAM_LOG_ERR("[VALIDATE] Pointer size class magic does not match: %p, magic %d", ptr, FREED_MAGIC);
-                }
-            }
-
-            return 1;
+            dam_small_lock();
+            result = dam_validate_small_ptr(ptr);
+            dam_small_unlock();
+            break;
         case DAM_LAYER_GENERAL:
-            block_header_t* header = get_block_header(ptr);
-
-            return 1;
+            dam_general_lock();
+            result = dam_validate_general_ptr(ptr, pool_header, quarantine);
+            dam_general_unlock();
+            break;
         case DAM_LAYER_DIRECT:
-            return 1;
+            dam_direct_lock();
+            result = dam_validate_direct_ptr(ptr);
+            dam_direct_unlock();
+            break;
+        default:
+            DAM_LOG_VALID_ERROR("[VALIDATE] Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
+            break;
+    }
+    if (result) DAM_LOG_VALID("[VALIDATE] Pointer: %p is validated to be in a safe state", ptr);
+    return result;
+}
+
+/*
+ * Very expensive sequence that loops through all pools of all layers and memory segments to validate metadata.
+ * expected complexity for this function is O(n * x) where n is amount of pools and x is the complexity of dam_validate_ptr()
+ */
+uint8_t dam_validate(uint8_t quarantine) {
+    pool_header_t* current = dam_pool_list;
+    while (current) {
+
+        current = current->next;
     }
     return 1;
 }

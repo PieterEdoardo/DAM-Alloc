@@ -283,3 +283,29 @@ void dam_snapshot_small(dam_snapshot_t* snapshot) {
 
     dam_small_unlock();
 }
+
+uint8_t dam_validate_small_ptr(void* ptr) {
+    size_class_header_t* size_class = get_size_class_header(ptr);
+    if (!size_class) {
+        DAM_LOG_VALID_ERROR("[VALIDATE] Pointer size class metadata is so damaged, header data could not be retrieved: %p", ptr);
+        return 0;
+    }
+    if (size_class->size_class_index < DAM_SIZE_CLASS_COUNT - 1 || size_class->size_class_index > DAM_SIZE_CLASS_COUNT - 1) {
+        DAM_LOG_VALID_ERROR("[VALIDATE] Pointer size class index is out of bounds: %p, index %hhu", ptr, size_class->size_class_index);
+        return 0;
+    }
+
+    if (!size_class->is_free) {
+        if (size_class->magic != SMALL_MAGIC) {
+            DAM_LOG_VALID_ERROR("[VALIDATE] Pointer size class magic does not match: %p, magic %d", ptr, SMALL_MAGIC);
+            return 0;
+        }
+    } else {
+        DAM_LOG("[VALIDATE] Pointer size class is free: %p", ptr);
+        if (size_class->magic != FREED_MAGIC) {
+            DAM_LOG_VALID_ERROR("[VALIDATE] Pointer size class magic does not match: %p, magic %d", ptr, FREED_MAGIC);
+            return 0;
+        }
+    }
+    return 1;
+}

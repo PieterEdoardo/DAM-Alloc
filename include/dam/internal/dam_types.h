@@ -37,7 +37,7 @@ typedef struct pool_header {
     dam_layer_type_t type;
     uint8_t read_only;
     struct pool_header* next;
-    block_header_t* free_block_list;
+    block_header_t* block_list;
 } pool_header_t;
 
 typedef struct size_class {

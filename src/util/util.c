@@ -57,28 +57,6 @@ pool_header_t* dam_pool_from_ptr(void* address) {
 /**********************
  * internal Functions *
  **********************/
-void init_allocator_unlocked(void) {
-    if (initialized) {
-        return;
-    }
-    if (!verify_page_size()) {
-        return;
-    }
-
-    DAM_LOG("[INIT] Initializing multi-threading...");
-    dam_thread_init();
-
-    DAM_LOG("[INIT] Initializing size class allocator...");
-    dam_small_init();
-    DAM_LOG("[INIT] Initializing growing pool allocator...");
-    dam_general_init();
-    DAM_LOG("[INIT] Initializing direct mmap() allocator...");
-    dam_direct_init();
-
-    initialized = 1;
-    DAM_LOG("[INIT] Allocator initialized");
-}
-
 void print_allocator_stats(void) {
     DAM_LOG("\n=== Allocator Statistics ===");
     DAM_LOG("Total allocations: %zu", stats.allocations);

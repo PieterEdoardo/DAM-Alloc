@@ -248,16 +248,16 @@ pool_header_t* create_general_pool(size_t min_size) {
     new_pool->memory = memory;
     new_pool->size = pool_size;
     new_pool->type = DAM_LAYER_GENERAL;
-    new_pool->free_block_list = (block_header_t*)((char*)memory + POOL_GENERAL_SIZE);
+    new_pool->block_list = (block_header_t*)((char*)memory + POOL_GENERAL_SIZE);
 
     char* usable_start = (char*)memory + POOL_GENERAL_SIZE;
     size_t usable_size = pool_size - POOL_GENERAL_SIZE;
 
-    new_pool->free_block_list = (block_header_t*)usable_start;
-    new_pool->free_block_list->size = usable_size - BLOCK_HEADER_SIZE;
-    new_pool->free_block_list->is_free = 1;
-    new_pool->free_block_list->next = NULL;
-    new_pool->free_block_list->magic = FREED_MAGIC;
+    new_pool->block_list = (block_header_t*)usable_start;
+    new_pool->block_list->size = usable_size - BLOCK_HEADER_SIZE;
+    new_pool->block_list->is_free = 1;
+    new_pool->block_list->next = NULL;
+    new_pool->block_list->magic = FREED_MAGIC;
 
     dam_register_pool(new_pool);
 
@@ -273,7 +273,7 @@ block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_po
     size_t blocks_checked = 0;
     pool_header_t* current_pool = dam_pool_list;
     while (current_pool) {
-        block_header_t* current_block = current_pool->free_block_list;
+        block_header_t* current_block = current_pool->block_list;
         while (current_block) {
             blocks_checked++;
             if (current_block->is_free && current_block->size >= actual_size) {
@@ -394,8 +394,8 @@ void dam_snapshot_general(dam_snapshot_t* snapshot) {
 // Get the largest free block by iteration and saving the latest biggest one.
 // While doing that, addition all the bytes of free blocks.
 void dam_general_fragmentation(pool_header_t* pool, dam_pool_snapshot_t* snapshot) {
-    block_header_t* current = pool->free_block_list;
     dam_general_lock();
+    block_header_t* current = pool->block_list;
     while (current) {
         if (current->is_free && current->magic == FREED_MAGIC) {
             if (current->size > snapshot->largest_free) snapshot->largest_free = current->size;
@@ -407,4 +407,46 @@ void dam_general_fragmentation(pool_header_t* pool, dam_pool_snapshot_t* snapsho
     }
     snapshot->fragmentation = (float)snapshot->largest_free / (float)snapshot->free;
     dam_general_unlock();
+}
+
+inline void general_pool_quarantine(pool_header_t* pool_header) {
+    DAM_LOG_VALID("Pool %p has been put in quarantine!", pool_header);
+    pool_header->read_only = 1;
+}
+
+uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t quarantine) {
+    block_header_t* block_header = get_block_header(ptr);
+    uint32_t* canary = dam_get_canary(block_header);
+
+    if (!block_header->is_free) {
+        if (block_header->magic != BLOCK_MAGIC) {
+            DAM_LOG_VALID_ERROR("Pointer size class magic does not match: %p, magic %d", ptr, block_header->magic);
+            if (quarantine) general_pool_quarantine(pool_header);
+
+            return 0;
+        }
+
+        if (*canary != CANARY_VALUE) {
+            DAM_LOG_VALID("Possible overflow detected at: %p", canary);
+            DAM_LOG_VALID_ERROR("Pointer canary value is invalid: %p, canary %d", ptr, *canary);
+            if (quarantine) general_pool_quarantine(pool_header);
+
+            return 0;
+        }
+    } else {
+        DAM_LOG("Pointer size class is free: %p", ptr);
+        if (block_header->magic != FREED_MAGIC) {
+            DAM_LOG_VALID_ERROR("Pointer size class magic does not match: %p, magic %d", ptr, block_header->magic);
+            if (quarantine) general_pool_quarantine(pool_header);
+
+            return 0;
+        }
+    }
+
+    DAM_LOG_VALID("[VALIDATE] Pointer: %p is successfully validated", ptr);
+    return 1;
+}
+
+inline uint32_t* dam_get_canary(block_header_t* block_header) {
+    return (uint32_t*)((char*)block_header + BLOCK_HEADER_SIZE + block_header->user_size);
 }

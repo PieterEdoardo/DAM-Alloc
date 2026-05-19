@@ -63,7 +63,7 @@ void  dam_direct_free(void* ptr) {
 }
 
 void* dam_direct_realloc(void* ptr, size_t size) {
-    block_header_t* block_header = direct_block_from_ptr(ptr);
+    block_header_t* block_header = get_direct_header(ptr);
     size_t old_size = block_header->size;
 
 
@@ -113,6 +113,26 @@ pool_header_t* direct_pool_from_ptr(void* ptr) {
     return (pool_header_t*)((char*)ptr - sizeof(block_header_t) - sizeof(pool_header_t));
 }
 
-block_header_t* direct_block_from_ptr(void* ptr) {
+block_header_t* get_direct_header(void* ptr) {
     return (block_header_t*)((char*)ptr - sizeof(block_header_t));
+}
+
+uint8_t dam_validate_direct_ptr(void* ptr) {
+    block_header_t* direct_header = get_direct_header(ptr);
+
+    if (!direct_header->is_free) {
+        if (direct_header->magic != BLOCK_MAGIC) {
+            DAM_LOG_VALID_ERROR("[VALIDATE] Pointer size class magic does not match: %p, magic %d", ptr, SMALL_MAGIC);
+            return 0;
+        }
+    } else {
+        DAM_LOG("[VALIDATE] Pointer size class is free: %p", ptr);
+        if (direct_header->magic != FREED_MAGIC) {
+            DAM_LOG_VALID_ERROR("[VALIDATE] Pointer size class magic does not match: %p, magic %d", ptr, FREED_MAGIC);
+            return 0;
+        }
+    }
+
+    DAM_LOG_VALID("[VALIDATE] Pointer: %p is successfully validated", ptr);
+    return 1;
 }

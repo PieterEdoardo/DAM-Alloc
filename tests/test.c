@@ -17,6 +17,7 @@
 
 #include "dam/dam.h"
 #include "dam/dam_log.h"
+#include "dam/internal/dam_internal.h"
 
 /* ------------------------------------------------------------------ */
 /* Tunables                                                             */
@@ -430,7 +431,34 @@ static void test_big_direct_allocations(void) {
 static void test_fragmentation(void) {
     size_t pool_count = dam_pool_count();
     dam_pool_snapshot_t buffer[pool_count];
-    size_t count = dam_general_pool_snapshots(buffer, pool_count);
+    memset(buffer, 0, sizeof(buffer));
+    size_t count = dam_fragmentation(buffer, pool_count);
+
+    if (pool_count != count) printf("[FAIL] pool_count=%zu\n", pool_count);
+
+    for (size_t i = 0; i < count; i++) {
+        printf("Pool: %zu\n", i);
+        printf("used: %lu\n", buffer[i].used);
+        printf("free: %lu\n", buffer[i].free);
+        printf("largest_free: %lu\n", buffer[i].largest_free);
+        printf("fragmentation: %f\n", buffer[i].fragmentation);
+    }
+
+    printf("PASS\n\n");
+}
+
+static void test_quarantine(void) {
+    void* a = dam_malloc(1000);
+    void* b = dam_malloc(1000);
+
+    char* p = (char*)a;
+
+    memset(p, 'A', 1100);
+
+    dam_validate_ptr(a, 1);
+    dam_validate_ptr(b, 1);
+
+    printf("PASS\n\n");
 }
 
 /* ------------------------------------------------------------------ */
@@ -450,6 +478,8 @@ int main(void) {
     test_sequential_sweep();
     test_realloc_churn();
     test_big_direct_allocations();
+    test_fragmentation();
+    test_quarantine();
 
     dam_snapshot_t snapshot = {0};
     dam_snapshot(&snapshot);

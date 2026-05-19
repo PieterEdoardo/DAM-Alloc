@@ -6,7 +6,7 @@
 #include "dam/internal/dam_types.h"
 
 // Core internals
-void init_allocator(void);
+void dam_init_allocator(void);
 void init_allocator_unlocked(void);
 void* dam_malloc_internal(size_t size);
 void dam_free_internal(void* ptr);
@@ -23,6 +23,10 @@ void dam_snapshot_small(dam_snapshot_t* snapshot);
 void dam_snapshot_general(dam_snapshot_t* snapshot);
 void dam_snapshot_direct(dam_snapshot_t* snapshot);
 void dam_general_fragmentation(pool_header_t* pool, dam_pool_snapshot_t* snapshot);
+uint8_t dam_validate_small_ptr(void* ptr);
+uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t quarantine);
+uint8_t dam_validate_direct_ptr(void* ptr);
+
 
 /* Helpers */
 void dam_register_pool(pool_header_t* new_pool_header);
@@ -31,13 +35,15 @@ pool_header_t* create_general_pool(size_t min_size);
 block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_pool);
 void split_block_if_possible(block_header_t* block_header, size_t actual_size);
 void coalesce_if_possible(block_header_t* block_header, pool_header_t* pool_header_t);
+uint32_t* dam_get_canary(block_header_t* block_header);
+void general_pool_quarantine(pool_header_t* pool_header);
 size_t align_up(size_t size, size_t alignment);
 int verify_page_size(void);
 pool_header_t* dam_pool_from_ptr(void* address);
 size_class_header_t* get_size_class_header(void* ptr);
 block_header_t* get_block_header(void* ptr);
 pool_header_t* direct_pool_from_ptr(void* ptr);
-block_header_t* direct_block_from_ptr(void* ptr);
+block_header_t* get_direct_header(void* ptr);
 
 
 /* allocator entry points */

@@ -1,11 +1,6 @@
 #ifndef DAM_CONFIG_H
 #define DAM_CONFIG_H
 
-#include <stddef.h>
-#include <stdint.h>
-
-// #include "internal/dam_internal.h"
-
 /* ================================ *
  * Build configuration              *
  * ================================ */

@@ -1,7 +1,5 @@
 #pragma once
-#include <stddef.h>
 
-#include "dam_types.h"
 #include "dam/dam_config.h"
 
 /* ================================ *
