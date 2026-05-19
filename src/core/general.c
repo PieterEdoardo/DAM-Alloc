@@ -100,10 +100,10 @@ void dam_general_free_internal(void* ptr, pool_header_t* pool_header) {
 
     unsigned int* end_canary = (unsigned int*)((char*)ptr + block_header->user_size);
     if (*end_canary != CANARY_VALUE) {
-        DAM_LOG_ERROR("[CANARY][FREE] Buffer overflow detected at %p! Canary was 0x%X, expected 0x%X",ptr, *end_canary, CANARY_VALUE);
+        DAM_LOG_ERROR("[FREE][CANARY] Buffer overflow detected at %p! Canary was 0x%X, expected 0x%X",ptr, *end_canary, CANARY_VALUE);
         // Continue to free, but user knows there was corruption.
     } else {
-        DAM_LOG("[CANARY][FREE] Buffer overflow check passed");
+        DAM_LOG("[FREE][CANARY] Buffer overflow check passed");
     }
 
     block_header->magic = FREED_MAGIC;
@@ -275,6 +275,10 @@ block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_po
     while (current_pool) {
         block_header_t* current_block = current_pool->block_list;
         while (current_block) {
+            if (current_pool->read_only) {
+                current_pool = current_pool->next;
+                continue;
+            }
             blocks_checked++;
             if (current_block->is_free && current_block->size >= actual_size) {
                 *found_pool = current_pool;
@@ -409,11 +413,6 @@ void dam_general_fragmentation(pool_header_t* pool, dam_pool_snapshot_t* snapsho
     dam_general_unlock();
 }
 
-inline void general_pool_quarantine(pool_header_t* pool_header) {
-    DAM_LOG_VALID("Pool %p has been put in quarantine!", pool_header);
-    pool_header->read_only = 1;
-}
-
 uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t quarantine) {
     block_header_t* block_header = get_block_header(ptr);
     uint32_t* canary = dam_get_canary(block_header);
@@ -445,6 +444,11 @@ uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t 
 
     DAM_LOG_VALID("[VALIDATE] Pointer: %p is successfully validated", ptr);
     return 1;
+}
+
+inline void general_pool_quarantine(pool_header_t* pool_header) {
+    DAM_LOG_VALID("Pool %p has been put in quarantine!", pool_header);
+    pool_header->read_only = 1;
 }
 
 inline uint32_t* dam_get_canary(block_header_t* block_header) {
