@@ -27,7 +27,6 @@ uint8_t dam_validate_small_ptr(void* ptr);
 uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t quarantine);
 uint8_t dam_validate_direct_ptr(void* ptr);
 
-
 /* Helpers */
 void dam_register_pool(pool_header_t* new_pool_header);
 void dam_unregister_pool(pool_header_t* pool_header);

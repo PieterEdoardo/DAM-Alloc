@@ -450,6 +450,7 @@ static void test_fragmentation(void) {
 static void test_quarantine(void) {
     void* a = dam_malloc(1000);
     void* b = dam_malloc(1000);
+    void* c = dam_malloc(1000);
 
     char* p = (char*)a;
 
@@ -457,6 +458,13 @@ static void test_quarantine(void) {
 
     dam_validate_ptr(a, 1);
     dam_validate_ptr(b, 1);
+    dam_validate_ptr(c, 1);
+
+    void* d = dam_malloc(1000);
+
+    dam_validate_ptr(d, 1);
+
+    c = dam_realloc(c, 1000);
 
     printf("PASS\n\n");
 }

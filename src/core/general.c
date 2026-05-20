@@ -131,16 +131,22 @@ void dam_general_free(void* ptr, pool_header_t* pool_header) {
 void* dam_general_realloc(void* ptr, size_t size) {
     block_header_t* block_header = get_block_header(ptr);
     size_t new_actual_size = align_up(size + sizeof(uint32_t), ALIGNMENT);
+    uint8_t quarantine = 0;
+
+    if (block_header->pool->read_only) {
+        DAM_LOG_ERROR("[REALLOC] Pointer: %p from quarantined pool detected: %p. Forced copy/free to new pool", ptr, block_header->pool);
+        quarantine = 1;
+    }
 
     dam_general_lock();
 
     if (block_header->magic != BLOCK_MAGIC) {
-        DAM_LOG_ERROR("Invalid pointer passed to dam_general_realloc:%p", ptr);
+        DAM_LOG_ERROR("[REALLOC] Invalid pointer passed to dam_general_realloc: %p", ptr);
         return NULL;
     }
 
     // Case 1 Shrink in place
-    if (block_header->size >= new_actual_size) {
+    if (block_header->size >= new_actual_size && !quarantine) {
 
         block_header->user_size = size;
         uint32_t* end_canary = (uint32_t*)((char*)ptr + size);
@@ -153,7 +159,7 @@ void* dam_general_realloc(void* ptr, size_t size) {
     }
 
     // Case 2 grow in-place if next block is free
-    if (block_header->next && block_header->next->is_free) {
+    if (block_header->next && block_header->next->is_free && !quarantine) {
         size_t available_space = block_header->size + BLOCK_HEADER_SIZE + block_header->next->size;
 
         if (available_space >= new_actual_size) {
@@ -258,6 +264,7 @@ pool_header_t* create_general_pool(size_t min_size) {
     new_pool->block_list->is_free = 1;
     new_pool->block_list->next = NULL;
     new_pool->block_list->magic = FREED_MAGIC;
+    new_pool->block_list->pool = new_pool;
 
     dam_register_pool(new_pool);
 
@@ -267,22 +274,38 @@ pool_header_t* create_general_pool(size_t min_size) {
     return new_pool;
 }
 
+/* @TODO
+ * Write better algorithm because O(n^2) is really slow
+ * */
+pool_header_t* find_free_pool(size_t actual_size, pool_header_t** found_pool) {
+    if (!dam_pool_list) return NULL;
+    pool_header_t* current_pool = dam_pool_list;
+
+    while (current_pool) {
+
+        current_pool = current_pool->next;
+    }
+
+}
+
 block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_pool) {
     if (!dam_pool_list) return NULL;
 
     size_t blocks_checked = 0;
     pool_header_t* current_pool = dam_pool_list;
     while (current_pool) {
+        if (current_pool->read_only == 1) {
+            DAM_LOG_VALID("[ALLOC] Pool %p skipped due to quarantine.", current_pool);
+            current_pool = current_pool->next;
+            continue;
+        }
         block_header_t* current_block = current_pool->block_list;
         while (current_block) {
-            if (current_pool->read_only) {
-                current_pool = current_pool->next;
-                continue;
-            }
             blocks_checked++;
             if (current_block->is_free && current_block->size >= actual_size) {
                 *found_pool = current_pool;
                 stats.blocks_searched += blocks_checked;
+
                 return current_block;
             }
             current_block = current_block->next;
@@ -304,6 +327,7 @@ void split_block_if_possible(block_header_t* block_header, size_t actual_size) {
         new_block_header->next = block_header->next;
         new_block_header->prev = block_header;
         new_block_header->magic = FREED_MAGIC;
+        new_block_header->pool = block_header->pool;
 
         if (block_header->next) block_header->next->prev = new_block_header;
 
@@ -442,7 +466,7 @@ uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t 
         }
     }
 
-    DAM_LOG_VALID("[VALIDATE] Pointer: %p is successfully validated", ptr);
+    DAM_LOG_VALID("Pointer: %p is successfully validated", ptr);
     return 1;
 }
 

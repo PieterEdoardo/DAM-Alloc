@@ -27,6 +27,7 @@ typedef struct block_header {
     size_t user_size;
     struct block_header* next;
     struct block_header* prev;
+    struct pool_header* pool;
     uint32_t magic;
     uint8_t is_free;
 } block_header_t;

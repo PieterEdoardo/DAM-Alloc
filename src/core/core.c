@@ -180,24 +180,24 @@ size_t dam_pool_count() {
  */
 uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine) {
     if (!ptr) {
-        DAM_LOG_VALID_ERROR("[VALIDATE] Pointer invalid: %p", ptr);
+        DAM_LOG_VALID_ERROR("Pointer invalid: %p", ptr);
         return 0;
     }
 
     pool_header_t* pool_header = dam_pool_from_ptr(ptr);
 
     if (!pool_header) {
-        DAM_LOG_VALID_ERROR("[VALIDATE] Pointer does not belong to DAM pool: %p", ptr);
+        DAM_LOG_VALID_ERROR("Pointer does not belong to DAM pool: %p", ptr);
         return 0;
     }
 
-    if (pool_header->read_only) DAM_LOG_VALID("[VALIDATE] Pointer belongs to quarantined pool: %p", ptr);
-    if (!pool_header->size) DAM_LOG_VALID("[VALIDATE] Pointer pool has no size: %p", ptr);
+    if (pool_header->read_only) DAM_LOG_VALID("Pointer belongs to quarantined pool: %p", ptr);
+    if (!pool_header->size) DAM_LOG_VALID("Pointer pool has no size: %p", ptr);
 
     uint8_t result = 0;
     switch (pool_header->type) {
         case DAM_LAYER_ERROR:
-            DAM_LOG_VALID_ERROR("[VALIDATE] Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
+            DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
             break;
         case DAM_LAYER_SMALL:
             dam_small_lock();
@@ -215,10 +215,10 @@ uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine) {
             dam_direct_unlock();
             break;
         default:
-            DAM_LOG_VALID_ERROR("[VALIDATE] Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
+            DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
             break;
     }
-    if (result) DAM_LOG_VALID("[VALIDATE] Pointer: %p is validated to be in a safe state", ptr);
+    if (result) DAM_LOG_VALID("Pointer: %p is validated to be in a safe state", ptr);
     return result;
 }
 
@@ -228,7 +228,9 @@ uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine) {
  */
 uint8_t dam_validate(uint8_t quarantine) {
     pool_header_t* current = dam_pool_list;
+
     while (current) {
+
 
         current = current->next;
     }
