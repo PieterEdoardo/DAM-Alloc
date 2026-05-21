@@ -22,7 +22,7 @@ thread_cache_t* dam_get_current_thread_cache(void);
 void dam_snapshot_small(dam_snapshot_t* snapshot);
 void dam_snapshot_general(dam_snapshot_t* snapshot);
 void dam_snapshot_direct(dam_snapshot_t* snapshot);
-void dam_general_fragmentation(pool_header_t* pool, dam_pool_snapshot_t* snapshot);
+void dam_general_fragmentation(pool_header_t* pool, dam_pool_fragmentation_t* snapshot);
 uint8_t dam_validate_small_ptr(void* ptr);
 uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t quarantine);
 uint8_t dam_validate_direct_ptr(void* ptr);

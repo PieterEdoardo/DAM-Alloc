@@ -430,7 +430,7 @@ static void test_big_direct_allocations(void) {
 
 static void test_fragmentation(void) {
     size_t pool_count = dam_pool_count();
-    dam_pool_snapshot_t buffer[pool_count];
+    dam_pool_fragmentation_t buffer[pool_count];
     memset(buffer, 0, sizeof(buffer));
     size_t count = dam_fragmentation(buffer, pool_count);
 
@@ -438,7 +438,6 @@ static void test_fragmentation(void) {
 
     for (size_t i = 0; i < count; i++) {
         printf("Pool: %zu\n", i);
-        printf("used: %lu\n", buffer[i].used);
         printf("free: %lu\n", buffer[i].free);
         printf("largest_free: %lu\n", buffer[i].largest_free);
         printf("fragmentation: %f\n", buffer[i].fragmentation);

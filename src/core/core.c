@@ -126,11 +126,15 @@ void dam_free(void* ptr) {
 * Memory diagnostics and security suite
 ***********************************************************/
 
+/*
+ * Creates systemwide snapshot of each layer and their usage statistics. Expensive, and slow.
+ */
 void dam_snapshot(dam_snapshot_t* snapshot) {
     dam_snapshot_small(snapshot);
     dam_snapshot_general(snapshot);
     dam_snapshot_direct(snapshot);
 }
+
 
 dam_layer_type_t dam_layer_for_size(size_t size) {
     if (size == 0) return DAM_LAYER_ERROR;
@@ -149,8 +153,8 @@ dam_layer_type_t dam_layer_for_size(size_t size) {
  * size_t pool_count = dam_pool_count();
  * dam_pool_snapshot_t buffer[pool_count];
  * size_t count = dam_general_pool_snapshots(buffer, pool_count);
- * */
-size_t dam_fragmentation(dam_pool_snapshot_t* snapshot_buffer, size_t capacity) {
+ */
+size_t dam_fragmentation(dam_pool_fragmentation_t* snapshot_buffer, size_t capacity) {
     pool_header_t* current = dam_pool_list;
     size_t count = 0;
     while (current) {
@@ -164,6 +168,16 @@ size_t dam_fragmentation(dam_pool_snapshot_t* snapshot_buffer, size_t capacity) 
     return count;
 }
 
+/*
+ * Same as fragmentation but instead calculates based on used bytes rather than free bytes.
+ */
+size_t dam_pressure(dam_pool_fragmentation_t* snapshot_buffer, size_t capacity) {
+
+
+    return 1;
+}
+
+// This function is kinda useless for the public API as it only counts general pools.
 size_t dam_pool_count() {
     pool_header_t* current = dam_pool_list;
     size_t count = 0;
@@ -176,7 +190,7 @@ size_t dam_pool_count() {
 }
 /*
  * Expensive function that checks metadata integrity of pointer. Does some required pool metadata testing as well.
- * Second argument is set to a non 0 number it will place the associated pool in quarantine.
+ * If second argument is set to a non 0 number it will place the associated pool in quarantine in case of event.
  */
 uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine) {
     if (!ptr) {

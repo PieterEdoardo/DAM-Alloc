@@ -274,20 +274,6 @@ pool_header_t* create_general_pool(size_t min_size) {
     return new_pool;
 }
 
-/* @TODO
- * Write better algorithm because O(n^2) is really slow
- * */
-pool_header_t* find_free_pool(size_t actual_size, pool_header_t** found_pool) {
-    if (!dam_pool_list) return NULL;
-    pool_header_t* current_pool = dam_pool_list;
-
-    while (current_pool) {
-
-        current_pool = current_pool->next;
-    }
-
-}
-
 block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_pool) {
     if (!dam_pool_list) return NULL;
 
@@ -421,15 +407,13 @@ void dam_snapshot_general(dam_snapshot_t* snapshot) {
 // 1.0 - (largest_free_block / total_free_bytes)
 // Get the largest free block by iteration and saving the latest biggest one.
 // While doing that, addition all the bytes of free blocks.
-void dam_general_fragmentation(pool_header_t* pool, dam_pool_snapshot_t* snapshot) {
+void dam_general_fragmentation(pool_header_t* pool, dam_pool_fragmentation_t* snapshot) {
     dam_general_lock();
     block_header_t* current = pool->block_list;
     while (current) {
         if (current->is_free && current->magic == FREED_MAGIC) {
             if (current->size > snapshot->largest_free) snapshot->largest_free = current->size;
             snapshot->free += current->size;
-        } else {
-            snapshot->used += current->size;
         }
         current = current->next;
     }
@@ -437,9 +421,22 @@ void dam_general_fragmentation(pool_header_t* pool, dam_pool_snapshot_t* snapsho
     dam_general_unlock();
 }
 
+void dam_general_pressure(pool_header_t* pool, dam_pool_pressure_t* snapshot) {
+    dam_general_lock();
+    block_header_t* current = pool->block_list;
+    while (current) {
+        if (!current->is_free && current->magic == BLOCK_MAGIC) {
+            if (current->size > snapshot->largest_used) snapshot->largest_used = current->size;
+            snapshot->used += current->size;
+        }
+        current = current->next;
+    }
+    snapshot->pressure = (float)snapshot->largest_used / (float)snapshot->used;
+    dam_general_unlock();
+}
+
 uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t quarantine) {
     block_header_t* block_header = get_block_header(ptr);
-    uint32_t* canary = dam_get_canary(block_header);
 
     if (!block_header->is_free) {
         if (block_header->magic != BLOCK_MAGIC) {
@@ -448,6 +445,8 @@ uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t 
 
             return 0;
         }
+
+        uint32_t* canary = dam_get_canary(block_header);
 
         if (*canary != CANARY_VALUE) {
             DAM_LOG_VALID("Possible overflow detected at: %p", canary);

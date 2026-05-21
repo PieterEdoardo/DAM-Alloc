@@ -80,11 +80,16 @@ typedef struct {
 } dam_snapshot_t;
 
 typedef struct {
-    size_t used;
     size_t free;
     size_t largest_free;
     float fragmentation;
-} dam_pool_snapshot_t;
+} dam_pool_fragmentation_t;
+
+typedef struct {
+    size_t used;
+    size_t largest_used;
+    float pressure;
+} dam_pool_pressure_t;
 
 extern pool_header_t* dam_pool_list;
 extern int initialized;
