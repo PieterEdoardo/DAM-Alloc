@@ -122,17 +122,16 @@ uint8_t dam_validate_direct_ptr(void* ptr) {
 
     if (!direct_header->is_free) {
         if (direct_header->magic != BLOCK_MAGIC) {
-            DAM_LOG_VALID_ERROR("Pointer size class magic does not match: %p, magic %d", ptr, SMALL_MAGIC);
+            DAM_LOG_VALID_ERROR("Pointer direct magic does not match: %p, magic %d", ptr, direct_header->magic);
             return 0;
         }
     } else {
         DAM_LOG("Pointer size class is free: %p", ptr);
         if (direct_header->magic != FREED_MAGIC) {
-            DAM_LOG_VALID_ERROR("Pointer size class magic does not match: %p, magic %d", ptr, FREED_MAGIC);
+            DAM_LOG_VALID_ERROR("Pointer direct free magic does not match: %p, magic %d", ptr, direct_header->magic);
             return 0;
         }
     }
 
-    DAM_LOG_VALID("Pointer: %p is successfully validated", ptr);
     return 1;
 }

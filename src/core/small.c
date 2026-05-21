@@ -297,13 +297,13 @@ uint8_t dam_validate_small_ptr(void* ptr) {
 
     if (!size_class->is_free) {
         if (size_class->magic != SMALL_MAGIC) {
-            DAM_LOG_VALID_ERROR("Pointer size class magic does not match: %p, magic %d", ptr, SMALL_MAGIC);
+            DAM_LOG_VALID_ERROR("Pointer size class magic does not match: %p, magic %d", ptr, size_class->magic);
             return 0;
         }
     } else {
         DAM_LOG("Pointer size class is free: %p", ptr);
         if (size_class->magic != FREED_MAGIC) {
-            DAM_LOG_VALID_ERROR("Pointer size class magic does not match: %p, magic %d", ptr, FREED_MAGIC);
+            DAM_LOG_VALID_ERROR("Pointer size class free magic does not match: %p, magic %d", ptr, size_class->magic);
             return 0;
         }
     }

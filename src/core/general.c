@@ -440,7 +440,7 @@ uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t 
 
     if (!block_header->is_free) {
         if (block_header->magic != BLOCK_MAGIC) {
-            DAM_LOG_VALID_ERROR("Pointer size class magic does not match: %p, magic %d", ptr, block_header->magic);
+            DAM_LOG_VALID_ERROR("Pointer magic does not match: %p, magic %d", ptr, block_header->magic);
             if (quarantine) general_pool_quarantine(pool_header);
 
             return 0;
@@ -465,7 +465,6 @@ uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t 
         }
     }
 
-    DAM_LOG_VALID("Pointer: %p is successfully validated", ptr);
     return 1;
 }
 
