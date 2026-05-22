@@ -15,3 +15,4 @@ _Static_assert((DAM_SMALL_MIN & DAM_SMALL_MIN - 1) == 0, "DAM_SMALL_MIN must be 
 _Static_assert((DAM_SMALL_MAX & DAM_SMALL_MAX - 1) == 0, "DAM_SMALL_MAX must be power of two");
 _Static_assert(DAM_SMALL_MIN <= DAM_SMALL_MAX, "Invalid size class range");
 _Static_assert(DAM_SMALL_MAX <= DAM_GENERAL_MAX, "Invalid allocator boundaries");
+_Static_assert(DAM_SIZE_CLASS_COUNT <= 255, "Bigger than 255 would overflow class header with an extra byte.");

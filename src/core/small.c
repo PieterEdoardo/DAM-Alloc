@@ -108,7 +108,7 @@ uint8_t size_to_class(size_t size) {
     return DAM_SIZE_CLASS_COUNT - 1;
 }
 
-void* dam_small_malloc_internal(size_t size) {
+void* dam_small_malloc_internal(size_t size, const char* trace) {
     uint8_t class = size_to_class(size);
     size_class_t* size_class = &size_classes[class];
 
@@ -133,7 +133,7 @@ void* dam_small_malloc_internal(size_t size) {
     return ptr;
 }
 
-void* dam_small_malloc(size_t size) {
+void* dam_small_malloc(size_t size, const char* trace) {
     uint8_t class = size_to_class(size);
 
     // Attempt fast path
@@ -159,13 +159,13 @@ void* dam_small_malloc(size_t size) {
 
 
     dam_small_lock();
-    void* ptr = dam_small_malloc_internal(size);
+    void* ptr = dam_small_malloc_internal(size, trace);
     dam_small_unlock();
 
     return ptr;
 }
 
-void* dam_small_realloc(void* ptr, size_t size) {
+void* dam_small_realloc(void* ptr, size_t size, const char* trace) {
     size_class_header_t* header = get_size_class_header(ptr);
     uint8_t current_index = header->size_class_index;
 
@@ -191,7 +191,7 @@ void* dam_small_realloc(void* ptr, size_t size) {
     }
 
     // Grow
-    void* new_ptr = dam_small_malloc_internal(size);
+    void* new_ptr = dam_small_malloc_internal(size, trace);
     if (new_ptr) {
         size_t copy_size = size_classes[current_index].block_size;
         memcpy(new_ptr, ptr, copy_size);

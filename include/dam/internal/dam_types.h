@@ -18,19 +18,28 @@ typedef struct size_class_header {
     uint32_t magic;
     uint8_t size_class_index;
     uint8_t is_free;
-    uint16_t padding;
+    uint8_t is_traced;
+    uint8_t padding;
     struct size_class_header* next;
 } size_class_header_t;
+
 
 typedef struct block_header {
     size_t size;
     size_t user_size;
-    struct block_header* next;
-    struct block_header* prev;
+    union {
+        struct block_header* ptr;
+        size_t size;
+    } prev;
+    struct block_header* next_ptr;
     struct pool_header* pool;
     uint32_t magic;
     uint8_t is_free;
+    uint8_t is_traced;
+    char trace[TRACE_SIZE];
 } block_header_t;
+
+
 
 typedef struct pool_header {
     void* memory;
@@ -90,6 +99,8 @@ typedef struct {
     size_t largest_used;
     float pressure;
 } dam_pool_pressure_t;
+
+
 
 extern pool_header_t* dam_pool_list;
 extern int initialized;

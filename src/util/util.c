@@ -42,17 +42,19 @@ void dam_unregister_pool(pool_header_t* pool_header) {
     }
 }
 
-pool_header_t* dam_pool_from_ptr(void* address) {
-    pool_header_t* p = dam_pool_list;
+pool_header_t* dam_pool_from_ptr(void* ptr) {
+    pool_header_t* pool_header = dam_pool_list;
 
-    while (p) {
-        if (address >= p->memory && (char*)address < (char*)p->memory + p->size) {
-            return p;
+    while (pool_header) {
+        if (ptr >= pool_header->memory && (char*)ptr < (char*)pool_header->memory + pool_header->size) {
+            return pool_header;
         }
-        p = p->next;
+        pool_header = pool_header->next;
     }
     return NULL;
 }
+
+
 
 /**********************
  * internal Functions *

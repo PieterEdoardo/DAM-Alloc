@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "dam/dam.h"
 #include "dam/dam_config.h"
@@ -56,9 +57,9 @@ void* dam_malloc(size_t size) {
     if (!initialized) dam_init();
 
     if (size == 0) return NULL;
-    if (size <= DAM_SMALL_MAX) return dam_small_malloc(size);
-    if (size <= DAM_GENERAL_MAX) return dam_general_malloc(size);
-    return dam_direct_malloc(size);
+    if (size <= DAM_SMALL_MAX) return dam_small_malloc(size, NULL);
+    if (size <= DAM_GENERAL_MAX) return dam_general_malloc(size, NULL);
+    return dam_direct_malloc(size, NULL);
 }
 
 void* dam_realloc(void* ptr, size_t size) {
@@ -78,13 +79,13 @@ void* dam_realloc(void* ptr, size_t size) {
 
     switch (pool->type) {
         case DAM_LAYER_SMALL:
-            return dam_small_realloc(ptr, size);
+            return dam_small_realloc(ptr, size, NULL);
 
         case DAM_LAYER_GENERAL:
-            return dam_general_realloc(ptr, size);
+            return dam_general_realloc(ptr, size, NULL);
 
         case DAM_LAYER_DIRECT:
-            return dam_direct_realloc(ptr, size);
+            return dam_direct_realloc(ptr, size, NULL);
 
         default:
             DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
@@ -126,6 +127,84 @@ void dam_free(void* ptr) {
 * Memory diagnostics and security suite
 ***********************************************************/
 
+void* dam_trace_malloc(size_t size, char* trace) {
+
+    if (!initialized) dam_init();
+
+    if (size == 0) return NULL;
+    if (size <= DAM_SMALL_MAX) return dam_small_malloc(size, trace);
+    if (size <= DAM_GENERAL_MAX) return dam_general_malloc(size, trace);
+    return dam_direct_malloc(size, trace);
+}
+
+void* dam_trace_realloc(void* ptr, size_t size, char* trace) {
+    if (!ptr) return dam_malloc(size);
+
+    if (size == 0) {
+        dam_free(ptr);
+        return NULL;
+    }
+
+    pool_header_t* pool = dam_pool_from_ptr(ptr);
+
+    if (!pool) {
+        DAM_LOG_ERROR("[REALLOC] Pointer does not belong to DAM: %p", ptr);
+        return NULL;
+    }
+
+    switch (pool->type) {
+        case DAM_LAYER_SMALL:
+            return dam_small_realloc(ptr, size, trace);
+
+        case DAM_LAYER_GENERAL:
+            return dam_general_realloc(ptr, size, trace);
+
+        case DAM_LAYER_DIRECT:
+            return dam_direct_realloc(ptr, size, trace);
+
+        default:
+            DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
+            return NULL;
+    }
+}
+char* dam_get_trace(void* ptr) {
+     pool_header_t* pool = dam_pool_from_ptr(ptr);
+
+    if (!pool) {
+        DAM_LOG_ERROR("[TRACE] Pointer does not belong to DAM: %p", ptr);
+        return NULL;
+    }
+
+    switch (pool->type) {
+        case DAM_LAYER_SMALL:
+            size_class_header_t* size_class_header = get_size_class_header(ptr);
+            if (!size_class_header->is_traced) return NULL;
+            // Small doesn't support this yet
+            return NULL;
+
+        case DAM_LAYER_GENERAL:
+            block_header_t* block_header = get_block_header(ptr);
+            if (!block_header->is_traced) return NULL;
+            return block_header->trace;
+
+        case DAM_LAYER_DIRECT:
+            block_header_t* direct_header = get_block_header(ptr);
+            if (!direct_header->is_traced) return NULL;
+            return direct_header->trace;
+
+        default:
+            DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
+            return NULL;
+    }
+}
+
+// Figure out how to get user submitted size, for all 3 layers here.
+void dam_uaf_free(void* ptr) {
+    // block_header_t* block = dam_block_from_ptr(ptr);
+    // size_t size = block->size;
+    // dam_free(ptr);
+    // memset(ptr, 0, block->user_size);
+}
 /*
  * Creates systemwide snapshot of each layer and their usage statistics. Expensive, and slow.
  */

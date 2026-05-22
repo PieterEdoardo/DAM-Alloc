@@ -26,7 +26,7 @@ void  dam_general_init() {
     }
 }
 
-void* dam_general_malloc_internal(size_t size) {
+void* dam_general_malloc_internal(size_t size, const char* trace) {
     size_t aligned_size = align_up(size, ALIGNMENT);
     size_t actual_size = aligned_size + sizeof(uint32_t);
     actual_size = align_up(actual_size, ALIGNMENT);
@@ -61,6 +61,12 @@ void* dam_general_malloc_internal(size_t size) {
     found_block->magic = BLOCK_MAGIC;
     split_block_if_possible(found_block, actual_size);
     found_block->user_size = size;
+
+    // Trace allocation!
+    if (trace != NULL) {
+        found_block->is_traced = 1;
+        strncpy(found_block->trace, trace, TRACE_SIZE);
+    }
 
     void* ptr = (char*)found_block + BLOCK_HEADER_SIZE;
 
@@ -114,9 +120,9 @@ void dam_general_free_internal(void* ptr, pool_header_t* pool_header) {
     DAM_LOG("[FREE] Pointer %p freed", ptr);
 }
 
-void* dam_general_malloc(size_t size) {
+void* dam_general_malloc(size_t size, const char* trace) {
     dam_general_lock();
-    void* ptr = dam_general_malloc_internal(size);
+    void* ptr = dam_general_malloc_internal(size, trace);
     dam_general_unlock();
 
     return ptr;
@@ -128,7 +134,7 @@ void dam_general_free(void* ptr, pool_header_t* pool_header) {
     dam_general_unlock();
 }
 
-void* dam_general_realloc(void* ptr, size_t size) {
+void* dam_general_realloc(void* ptr, size_t size, const char* trace) {
     block_header_t* block_header = get_block_header(ptr);
     size_t new_actual_size = align_up(size + sizeof(uint32_t), ALIGNMENT);
     uint8_t quarantine = 0;
@@ -159,20 +165,20 @@ void* dam_general_realloc(void* ptr, size_t size) {
     }
 
     // Case 2 grow in-place if next block is free
-    if (block_header->next && block_header->next->is_free && !quarantine) {
-        size_t available_space = block_header->size + BLOCK_HEADER_SIZE + block_header->next->size;
+    if (block_header->next_ptr && block_header->next_ptr->is_free && !quarantine) {
+        size_t available_space = block_header->size + BLOCK_HEADER_SIZE + block_header->next_ptr->size;
 
         if (available_space >= new_actual_size) {
 
-            block_header_t* old_next = block_header->next;
+            block_header_t* old_next = block_header->next_ptr;
             block_header->size = available_space;
-            block_header->next = old_next->next;
+            block_header->next_ptr = old_next->next_ptr;
 
             old_next->magic = 0;
-            old_next->next = NULL;
-            old_next->prev = NULL;
+            old_next->next_ptr = NULL;
+            old_next->prev.ptr = NULL;
 
-            if (block_header->next) block_header->next->prev = block_header;
+            if (block_header->next_ptr) block_header->next_ptr->prev.ptr = block_header;
 
             block_header->user_size = size;
             uint32_t* end_canary = (uint32_t*)((char*)ptr + size);
@@ -262,7 +268,7 @@ pool_header_t* create_general_pool(size_t min_size) {
     new_pool->block_list = (block_header_t*)usable_start;
     new_pool->block_list->size = usable_size - BLOCK_HEADER_SIZE;
     new_pool->block_list->is_free = 1;
-    new_pool->block_list->next = NULL;
+    new_pool->block_list->next_ptr = NULL;
     new_pool->block_list->magic = FREED_MAGIC;
     new_pool->block_list->pool = new_pool;
 
@@ -294,7 +300,7 @@ block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_po
 
                 return current_block;
             }
-            current_block = current_block->next;
+            current_block = current_block->next_ptr;
         }
         current_pool = current_pool->next;
     }
@@ -310,43 +316,43 @@ void split_block_if_possible(block_header_t* block_header, size_t actual_size) {
         new_block_header->size = block_header->size - actual_size - BLOCK_HEADER_SIZE;
         new_block_header->user_size = 0;
         new_block_header->is_free = 1;
-        new_block_header->next = block_header->next;
-        new_block_header->prev = block_header;
+        new_block_header->next_ptr = block_header->next_ptr;
+        new_block_header->prev.ptr = block_header;
         new_block_header->magic = FREED_MAGIC;
         new_block_header->pool = block_header->pool;
 
-        if (block_header->next) block_header->next->prev = new_block_header;
+        if (block_header->next_ptr) block_header->next_ptr->prev.ptr = new_block_header;
 
         block_header->size = actual_size;
-        block_header->next = new_block_header;
+        block_header->next_ptr = new_block_header;
 
         stats.splits++;
         // DAM_LOG("[SPLIT] Split block: allocated=%zu, remaining=%zu", user_size, new_block_header->size);
     }
 }
 
-void coalesce_if_possible(block_header_t* block_header, pool_header_t* pool_header) {
+void coalesce_if_possible(block_header_t* block_header, const pool_header_t* pool_header) {
     // Coalesce with previous block if it's free
-    if (block_header->prev && block_header->prev->is_free && block_header->prev->magic == FREED_MAGIC) {
+    if (block_header->prev.ptr && block_header->prev.ptr->is_free && block_header->prev.ptr->magic == FREED_MAGIC) {
         DAM_LOG("[COALESCE] Merging with previous block: %zu + %zu", block_header->prev->size, block_header->size);
-        block_header->prev->size += BLOCK_HEADER_SIZE + block_header->size;
-        block_header->prev->next = block_header->next;
+        block_header->prev.ptr->size += BLOCK_HEADER_SIZE + block_header->size;
+        block_header->prev.ptr->next_ptr = block_header->next_ptr;
         stats.coalesces++;
 
-        if (block_header->next) block_header->next->prev = block_header->prev;
+        if (block_header->next_ptr) block_header->next_ptr->prev.ptr = block_header->prev.ptr;
 
-        block_header = block_header->prev;
+        block_header = block_header->prev.ptr;
     }
 
     // Coalesce with next block if it's free
-    if (block_header->next && block_header->next->is_free && block_header->next->magic == FREED_MAGIC) {
-        if ((void*)block_header->next >= pool_header->memory && (char*)block_header->next < (char*)pool_header->memory + pool_header->size) {
+    if (block_header->next_ptr && block_header->next_ptr->is_free && block_header->next_ptr->magic == FREED_MAGIC) {
+        if ((void*)block_header->next_ptr >= pool_header->memory && (char*)block_header->next_ptr < (char*)pool_header->memory + pool_header->size) {
             DAM_LOG("[COALESCE] Merging with next block: %zu + %zu", block_header->size, block_header->next->size);
-            block_header->size += BLOCK_HEADER_SIZE + block_header->next->size;
-            block_header->next = block_header->next->next;
+            block_header->size += BLOCK_HEADER_SIZE + block_header->next_ptr->size;
+            block_header->next_ptr = block_header->next_ptr->next_ptr;
             stats.coalesces++;
 
-            if (block_header->next) block_header->next->prev = block_header;
+            if (block_header->next_ptr) block_header->next_ptr->prev.ptr = block_header;
         }
     }
 }
@@ -415,7 +421,7 @@ void dam_general_fragmentation(pool_header_t* pool, dam_pool_fragmentation_t* sn
             if (current->size > snapshot->largest_free) snapshot->largest_free = current->size;
             snapshot->free += current->size;
         }
-        current = current->next;
+        current = current->next_ptr;
     }
     snapshot->fragmentation = (float)snapshot->largest_free / (float)snapshot->free;
     dam_general_unlock();
@@ -429,7 +435,7 @@ void dam_general_pressure(pool_header_t* pool, dam_pool_pressure_t* snapshot) {
             if (current->size > snapshot->largest_used) snapshot->largest_used = current->size;
             snapshot->used += current->size;
         }
-        current = current->next;
+        current = current->next_ptr;
     }
     snapshot->pressure = (float)snapshot->largest_used / (float)snapshot->used;
     dam_general_unlock();

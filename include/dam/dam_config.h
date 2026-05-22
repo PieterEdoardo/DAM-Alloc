@@ -26,7 +26,8 @@
 #define DAM_SMALL_MIN 32
 #define DAM_SMALL_MAX 256
 #define DAM_GENERAL_MAX KiB(64)
-#define MAX_POOLS 10
+#define MAX_POOLS 20
+#define MAX_POOL_OVERFLOW_TO_DIRECT_ALLOWED 0
 #define INITIAL_POOL_SIZE MiB(1)
 #define DAM_DIRECT_SHRINK_PERCENTAGE 80
 
@@ -35,7 +36,8 @@
  ********************/
 #define ALIGN_UP_CONST(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
 #define ALIGNMENT (_Alignof(max_align_t))
-#define PAGE_SIZE 4096 // Assumed number
+#define PAGE_SIZE KiB(4) // Assumed number
+#define TRACE_SIZE 16 // Can be dangerous to change
 
 // Headers
 #define BLOCK_HEADER_SIZE ALIGN_UP_CONST(sizeof(block_header_t), ALIGNMENT)
@@ -53,6 +55,7 @@
 // Multi threading & thread local caches
 #define THREAD_CACHE_MAX_BLOCKS_PER_CLASS 64
 #define THREAD_CACHE_REFILL_BATCH_SIZE 8
+
 /******************
  * resources      *
  ******************/

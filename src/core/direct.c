@@ -10,7 +10,7 @@
 
 void  dam_direct_init(void) {}
 
-void* dam_direct_malloc_internal(size_t size) {
+void* dam_direct_malloc_internal(size_t size, const char* trace) {
     size_t total = align_up(sizeof(pool_header_t) +sizeof(block_header_t) + size, PAGE_SIZE);
 
     void* memory = mmap(
@@ -36,6 +36,11 @@ void* dam_direct_malloc_internal(size_t size) {
     block_header->size = size;
     block_header->magic = BLOCK_MAGIC;
 
+    if (trace != NULL) {
+        block_header->is_traced = 1;
+        strncpy(block_header->trace, trace, TRACE_SIZE);
+    }
+
     return block_header + 1;
 }
 
@@ -48,9 +53,9 @@ void  dam_direct_free_internal(void* ptr) {
     munmap(pool_header, pool_header->size);
 }
 
-void* dam_direct_malloc(size_t size) {
+void* dam_direct_malloc(size_t size, const char* trace) {
     dam_direct_lock();
-    void* ptr = dam_direct_malloc_internal(size);
+    void* ptr = dam_direct_malloc_internal(size, trace);
     dam_direct_unlock();
 
     return ptr;
@@ -62,7 +67,7 @@ void  dam_direct_free(void* ptr) {
     dam_direct_unlock();
 }
 
-void* dam_direct_realloc(void* ptr, size_t size) {
+void* dam_direct_realloc(void* ptr, size_t size, const char* trace) {
     block_header_t* block_header = get_direct_header(ptr);
     size_t old_size = block_header->size;
 
@@ -82,7 +87,7 @@ void* dam_direct_realloc(void* ptr, size_t size) {
 
     // Case 2/3 stay inside direct
     if (size *  100 <= old_size * DAM_DIRECT_SHRINK_PERCENTAGE || size > block_header->size) {
-        new_ptr = dam_direct_malloc_internal(size);
+        new_ptr = dam_direct_malloc_internal(size, trace);
         if (new_ptr) {
             memcpy(new_ptr, ptr, old_size < size ? old_size : size);
             dam_direct_free_internal(ptr);

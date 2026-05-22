@@ -131,6 +131,7 @@ void print_snapshot(const dam_snapshot_t* snapshot) {
     printf("quarantined_pools: %zu\n", snapshot->quarantined_pools);
     printf("direct_allocations: %zu\n", snapshot->direct_allocations);
     printf("direct_bytes_used: %zu\n", snapshot->direct_bytes_used);
+    printf("Grand total used: %zu Kilobytes \n", (snapshot->classes_bytes_used + snapshot->pools_bytes_used + snapshot->direct_bytes_used) / 1024);
 }
 
 /* ------------------------------------------------------------------ */
@@ -468,6 +469,16 @@ static void test_quarantine(void) {
     printf("PASS\n\n");
 }
 
+static void test_tracing(void) {
+    void* a = dam_trace_malloc(1000, "tag:user_123");
+
+    char* trace = dam_get_trace(a);
+
+    printf("Traced value: %s\n", trace);
+
+    printf("PASS\n\n");
+}
+
 /* ------------------------------------------------------------------ */
 /* main                                                                 */
 /* ------------------------------------------------------------------ */
@@ -487,11 +498,13 @@ int main(void) {
     test_big_direct_allocations();
     test_fragmentation();
     test_quarantine();
+    test_tracing();
+
+    // test_random_churn();      /* longest — run last */
 
     dam_snapshot_t snapshot = {0};
     dam_snapshot(&snapshot);
     print_snapshot(&snapshot);
-    // test_random_churn();      /* longest — run last */
 
     printf("=====================\n");
     printf("ALL TESTS PASSED\n");
