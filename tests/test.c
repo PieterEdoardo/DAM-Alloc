@@ -470,7 +470,7 @@ static void test_quarantine(void) {
 }
 
 static void test_tracing(void) {
-    void* a = dam_trace_malloc(1000, "tag:user_123");
+    void* a = dam_trace_malloc(MiB(10), "tag:user_123");
 
     char* trace = dam_get_trace(a);
 

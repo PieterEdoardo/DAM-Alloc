@@ -38,10 +38,18 @@ void* dam_direct_malloc_internal(size_t size, const char* trace) {
 
     if (trace != NULL) {
         block_header->is_traced = 1;
-        strncpy(block_header->trace, trace, TRACE_SIZE);
+        char* trace_ptr = (char*)block_header + BLOCK_HEADER_SIZE;
+        strncpy(trace_ptr, trace, TRACE_SIZE - 1);
+        trace_ptr[TRACE_SIZE - 1] = '\0';
+
+        return (char*)block_header + BLOCK_HEADER_SIZE + TRACE_SIZE;
     }
 
-    return block_header + 1;
+    return (char*)block_header + BLOCK_HEADER_SIZE;
+}
+
+char* get_direct_trace(void* ptr) {
+    return (char*)ptr - TRACE_SIZE;
 }
 
 void  dam_direct_free_internal(void* ptr) {
@@ -113,15 +121,6 @@ void dam_snapshot_direct(dam_snapshot_t* snapshot) {
     dam_direct_unlock();
 }
 
-
-pool_header_t* direct_pool_from_ptr(void* ptr) {
-    return (pool_header_t*)((char*)ptr - sizeof(block_header_t) - sizeof(pool_header_t));
-}
-
-block_header_t* get_direct_header(void* ptr) {
-    return (block_header_t*)((char*)ptr - sizeof(block_header_t));
-}
-
 uint8_t dam_validate_direct_ptr(void* ptr) {
     block_header_t* direct_header = get_direct_header(ptr);
 
@@ -139,4 +138,15 @@ uint8_t dam_validate_direct_ptr(void* ptr) {
     }
 
     return 1;
+}
+
+pool_header_t* direct_pool_from_ptr(void* ptr) {
+    return (pool_header_t*)((char*)ptr - sizeof(block_header_t) - sizeof(pool_header_t));
+}
+
+block_header_t* get_direct_header(void* ptr) {
+    return (block_header_t*)((char*)ptr - sizeof(block_header_t));
+}
+block_header_t* get_direct_traced_header(void* ptr) {
+    return (block_header_t*)((char*)ptr - sizeof(block_header_t) - TRACE_SIZE);
 }

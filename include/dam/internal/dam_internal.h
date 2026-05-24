@@ -43,6 +43,7 @@ size_class_header_t* get_size_class_header(void* ptr);
 block_header_t* get_block_header(void* ptr);
 pool_header_t* direct_pool_from_ptr(void* ptr);
 block_header_t* get_direct_header(void* ptr);
+char* get_direct_trace(void* ptr);
 
 
 /* allocator entry points */

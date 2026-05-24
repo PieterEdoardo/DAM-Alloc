@@ -152,6 +152,7 @@ void* dam_trace_realloc(void* ptr, size_t size, char* trace) {
         return NULL;
     }
 
+    // none of this works yet
     switch (pool->type) {
         case DAM_LAYER_SMALL:
             return dam_small_realloc(ptr, size, trace);
@@ -188,9 +189,7 @@ char* dam_get_trace(void* ptr) {
             return block_header->trace;
 
         case DAM_LAYER_DIRECT:
-            block_header_t* direct_header = get_block_header(ptr);
-            if (!direct_header->is_traced) return NULL;
-            return direct_header->trace;
+            return get_direct_trace(ptr);
 
         default:
             DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
