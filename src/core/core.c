@@ -184,9 +184,7 @@ char* dam_get_trace(void* ptr) {
             return NULL;
 
         case DAM_LAYER_GENERAL:
-            block_header_t* block_header = get_block_header(ptr);
-            if (!block_header->is_traced) return NULL;
-            return block_header->trace;
+            return get_general_trace(ptr);
 
         case DAM_LAYER_DIRECT:
             return get_direct_trace(ptr);

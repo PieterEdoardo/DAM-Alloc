@@ -62,13 +62,19 @@ void* dam_general_malloc_internal(size_t size, const char* trace) {
     split_block_if_possible(found_block, actual_size);
     found_block->user_size = size;
 
+    void* ptr;
+
     // Trace allocation!
     if (trace != NULL) {
         found_block->is_traced = 1;
-        strncpy(found_block->trace, trace, TRACE_SIZE);
-    }
+        char* trace_ptr = (char*)found_block + BLOCK_HEADER_SIZE;
+        strncpy(trace_ptr, trace, TRACE_SIZE - 1);
+        trace_ptr[TRACE_SIZE - 1] = '\0';
 
-    void* ptr = (char*)found_block + BLOCK_HEADER_SIZE;
+        ptr = (char*)found_block + BLOCK_HEADER_SIZE + TRACE_SIZE;
+    } else {
+        ptr = (char*)found_block + BLOCK_HEADER_SIZE;
+    }
 
     uint32_t* end_canary = (uint32_t*)((char*)ptr + found_block->user_size);
     *end_canary = CANARY_VALUE;
@@ -77,7 +83,11 @@ void* dam_general_malloc_internal(size_t size, const char* trace) {
     return ptr;
 }
 
-void dam_general_free_internal(void* ptr, pool_header_t* pool_header) {
+inline char* get_general_trace(void* ptr) {
+    return (char*)ptr - TRACE_SIZE;
+}
+
+void dam_general_free_internal(void* ptr, const pool_header_t* pool_header) {
     block_header_t* block_header = get_block_header(ptr);
 
     // Double free checks
@@ -357,42 +367,14 @@ void coalesce_if_possible(block_header_t* block_header, const pool_header_t* poo
     }
 }
 
-void cleanup_allocator(void) {
-    DAM_LOG("[CLEANUP] Freeing all pools...");
-
-    pool_header_t* current = dam_pool_list;
-    int pool_count = 0;
-
-    while (current) {
-
-        DAM_LOG("[CLEANUP] Freeing pool at %p (size: %zu)",
-               current->memory, current->size);
-
-        if (munmap(current->memory, current->size) == -1) {
-            DAM_LOG_ERROR("munmap failed");
-        }
-
-        pool_count++;
-        current = current->next;
-    }
-
-    DAM_LOG("[CLEANUP] Freed %d pools", pool_count);
-
-    dam_pool_list = NULL;
-    initialized = 0;
-
-    // Reset stats
-    stats.allocations = 0;
-    stats.frees = 0;
-    stats.blocks_searched = 0;
-    stats.splits = 0;
-    stats.coalesces = 0;
-    stats.pools_created = 0;
-}
-
 inline block_header_t* get_block_header(void* ptr) {
     return (block_header_t*)((char*)ptr - BLOCK_HEADER_SIZE);
 }
+
+inline block_header_t* get_block_trace_header(void* ptr) {
+    return (block_header_t*)((char*)ptr - BLOCK_HEADER_SIZE - TRACE_SIZE);
+}
+
 
 void dam_snapshot_general(dam_snapshot_t* snapshot) {
     pool_header_t* current = dam_pool_list;
