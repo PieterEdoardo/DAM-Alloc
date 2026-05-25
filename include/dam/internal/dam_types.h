@@ -100,6 +100,20 @@ typedef struct {
     float pressure;
 } dam_pool_pressure_t;
 
+typedef struct {
+    union {
+        size_t used;
+        size_t free;
+    } size;
+    union {
+        size_t used;
+        size_t free;
+    } largest;
+    union {
+        float fragmentation;
+        float pressure;
+    } snapshot;
+} dam_pool_snapshot_t;
 
 
 extern pool_header_t* dam_pool_list;

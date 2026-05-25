@@ -97,6 +97,7 @@ static pool_header_t* create_small_pool(uint8_t class_index) {
     return new_pool;
 }
 
+// These two functions can be optimized to be O(1) rather then O(n)
 uint8_t size_to_class(size_t size) {
     for (size_t i = 0; i < DAM_SIZE_CLASS_COUNT; i++) {
         if (size <= size_classes[i].block_size) {
@@ -104,8 +105,18 @@ uint8_t size_to_class(size_t size) {
         }
     }
 
-    // Should never happen if caller checks DAM_SMALL_MAX
+    // Should never happen if parent function checks DAM_SMALL_MAX
     return DAM_SIZE_CLASS_COUNT - 1;
+}
+
+size_t class_to_size(uint8_t class_index) {
+    for (size_t i = 0; i < DAM_SIZE_CLASS_COUNT; i++) {
+        if (i == class_index) {
+            return size_classes[i].block_size;
+        }
+    }
+
+    return 0;
 }
 
 void* dam_small_malloc_internal(size_t size, const char* trace) {

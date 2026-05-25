@@ -23,6 +23,7 @@ void dam_snapshot_small(dam_snapshot_t* snapshot);
 void dam_snapshot_general(dam_snapshot_t* snapshot);
 void dam_snapshot_direct(dam_snapshot_t* snapshot);
 void dam_general_fragmentation(pool_header_t* pool, dam_pool_fragmentation_t* snapshot);
+void dam_general_pressure(pool_header_t* pool, dam_pool_pressure_t* snapshot);
 uint8_t dam_validate_small_ptr(void* ptr);
 uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t quarantine);
 uint8_t dam_validate_direct_ptr(void* ptr);
@@ -45,6 +46,7 @@ pool_header_t* direct_pool_from_ptr(void* ptr);
 block_header_t* get_direct_header(void* ptr);
 char* get_direct_trace(void* ptr);
 char* get_general_trace(void* ptr);
+size_t class_to_size(uint8_t class_index);
 
 
 /* allocator entry points */

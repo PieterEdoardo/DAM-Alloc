@@ -109,12 +109,15 @@ void dam_free(void* ptr) {
         case DAM_LAYER_SMALL:
             dam_small_free(ptr);
             break;
+
         case DAM_LAYER_GENERAL:
             dam_general_free(ptr, pool);
             break;
+
         case DAM_LAYER_DIRECT:
             dam_direct_free(ptr);
             break;
+
         default:
             DAM_LOG_ERROR("Unknown pool type for ptr %p", ptr);
             break;
@@ -178,8 +181,7 @@ char* dam_get_trace(void* ptr) {
 
     switch (pool->type) {
         case DAM_LAYER_SMALL:
-            size_class_header_t* size_class_header = get_size_class_header(ptr);
-            if (!size_class_header->is_traced) return NULL;
+            if (!get_size_class_header(ptr)->is_traced) return NULL;
             // Small doesn't support this yet
             return NULL;
 
@@ -197,10 +199,32 @@ char* dam_get_trace(void* ptr) {
 
 // Figure out how to get user submitted size, for all 3 layers here.
 void dam_uaf_free(void* ptr) {
-    // block_header_t* block = dam_block_from_ptr(ptr);
-    // size_t size = block->size;
-    // dam_free(ptr);
-    // memset(ptr, 0, block->user_size);
+    pool_header_t* pool_header = dam_pool_from_ptr(ptr);
+
+    if (!pool_header) {
+        DAM_LOG_ERROR("[REALLOC] Pointer does not belong to DAM: %p", ptr);
+    } else {
+        switch (pool_header->type) {
+            case DAM_LAYER_SMALL:
+                memset(ptr, 0, class_to_size(get_size_class_header(ptr)->size_class_index));
+                dam_small_free(ptr);
+                break;
+
+            case DAM_LAYER_GENERAL:
+                memset(ptr, 0, get_block_header(ptr)->size);
+                dam_general_free(ptr, pool_header);
+                break;
+
+            case DAM_LAYER_DIRECT:
+                memset(ptr, 0, get_block_header(ptr)->size);
+                dam_direct_free(ptr);
+                break;
+
+            default:
+                DAM_LOG_ERROR("[UAF][FREE] Unknown layer type for ptr %p", ptr);
+                break;
+        }
+    }
 }
 /*
  * Creates systemwide snapshot of each layer and their usage statistics. Expensive, and slow.
@@ -247,10 +271,18 @@ size_t dam_fragmentation(dam_pool_fragmentation_t* snapshot_buffer, size_t capac
 /*
  * Same as fragmentation but instead calculates based on used bytes rather than free bytes.
  */
-size_t dam_pressure(dam_pool_fragmentation_t* snapshot_buffer, size_t capacity) {
+size_t dam_pressure(dam_pool_pressure_t* snapshot_buffer, size_t capacity) {
+    pool_header_t* current = dam_pool_list;
+    size_t count = 0;
+    while (current) {
+        if (current->type == DAM_LAYER_GENERAL && count < capacity) {
+            dam_general_pressure(current, &snapshot_buffer[count]);
+            count++;
+        }
+        current = current->next;
+    }
 
-
-    return 1;
+    return count;
 }
 
 // This function is kinda useless for the public API as it only counts general pools.
@@ -289,21 +321,25 @@ uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine) {
         case DAM_LAYER_ERROR:
             DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
             break;
+
         case DAM_LAYER_SMALL:
             dam_small_lock();
             result = dam_validate_small_ptr(ptr);
             dam_small_unlock();
             break;
+
         case DAM_LAYER_GENERAL:
             dam_general_lock();
             result = dam_validate_general_ptr(ptr, pool_header, quarantine);
             dam_general_unlock();
             break;
+
         case DAM_LAYER_DIRECT:
             dam_direct_lock();
             result = dam_validate_direct_ptr(ptr);
             dam_direct_unlock();
             break;
+
         default:
             DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
             break;
