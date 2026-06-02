@@ -181,9 +181,7 @@ char* dam_get_trace(void* ptr) {
 
     switch (pool->type) {
         case DAM_LAYER_SMALL:
-            if (!get_size_class_header(ptr)->is_traced) return NULL;
-            // Small doesn't support this yet
-            return NULL;
+            return get_small_trace(ptr);
 
         case DAM_LAYER_GENERAL:
             return get_general_trace(ptr);
@@ -197,7 +195,6 @@ char* dam_get_trace(void* ptr) {
     }
 }
 
-// Figure out how to get user submitted size, for all 3 layers here.
 void dam_uaf_free(void* ptr) {
     pool_header_t* pool_header = dam_pool_from_ptr(ptr);
 
@@ -226,6 +223,7 @@ void dam_uaf_free(void* ptr) {
         }
     }
 }
+
 /*
  * Creates systemwide snapshot of each layer and their usage statistics. Expensive, and slow.
  */
@@ -234,7 +232,6 @@ void dam_snapshot(dam_snapshot_t* snapshot) {
     dam_snapshot_general(snapshot);
     dam_snapshot_direct(snapshot);
 }
-
 
 dam_layer_type_t dam_layer_for_size(size_t size) {
     if (size == 0) return DAM_LAYER_ERROR;
@@ -268,23 +265,6 @@ size_t dam_fragmentation(dam_pool_fragmentation_t* snapshot_buffer, size_t capac
     return count;
 }
 
-/*
- * Same as fragmentation but instead calculates based on used bytes rather than free bytes.
- */
-size_t dam_pressure(dam_pool_pressure_t* snapshot_buffer, size_t capacity) {
-    pool_header_t* current = dam_pool_list;
-    size_t count = 0;
-    while (current) {
-        if (current->type == DAM_LAYER_GENERAL && count < capacity) {
-            dam_general_pressure(current, &snapshot_buffer[count]);
-            count++;
-        }
-        current = current->next;
-    }
-
-    return count;
-}
-
 // This function is kinda useless for the public API as it only counts general pools.
 size_t dam_pool_count() {
     pool_header_t* current = dam_pool_list;
@@ -300,12 +280,11 @@ size_t dam_pool_count() {
  * Expensive function that checks metadata integrity of pointer. Does some required pool metadata testing as well.
  * If second argument is set to a non 0 number it will place the associated pool in quarantine in case of event.
  */
-uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine) {
+uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine, uint8_t is_traced) {
     if (!ptr) {
         DAM_LOG_VALID_ERROR("Pointer invalid: %p", ptr);
         return 0;
     }
-
     pool_header_t* pool_header = dam_pool_from_ptr(ptr);
 
     if (!pool_header) {
@@ -324,19 +303,19 @@ uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine) {
 
         case DAM_LAYER_SMALL:
             dam_small_lock();
-            result = dam_validate_small_ptr(ptr);
+            result = dam_validate_small_ptr(ptr, is_traced);
             dam_small_unlock();
             break;
 
         case DAM_LAYER_GENERAL:
             dam_general_lock();
-            result = dam_validate_general_ptr(ptr, pool_header, quarantine);
+            result = dam_validate_general_ptr(ptr, pool_header, quarantine, is_traced);
             dam_general_unlock();
             break;
 
         case DAM_LAYER_DIRECT:
             dam_direct_lock();
-            result = dam_validate_direct_ptr(ptr);
+            result = dam_validate_direct_ptr(ptr, is_traced);
             dam_direct_unlock();
             break;
 
@@ -353,12 +332,46 @@ uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine) {
  * expected complexity for this function is O(n * x) where n is amount of pools and x is the complexity of dam_validate_ptr()
  */
 uint8_t dam_validate(uint8_t quarantine) {
-    pool_header_t* current = dam_pool_list;
-
-    while (current) {
-
-
-        current = current->next;
-    }
+    // pool_header_t* pool_header = dam_pool_list;
+    //
+    // while (pool_header) {
+    //
+    //     uint8_t result;
+    //
+    //     switch (pool_header->type) {
+    //         case DAM_LAYER_ERROR:
+    //             DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", pool_header, pool_header->type);
+    //             break;
+    //
+    //         case DAM_LAYER_SMALL:
+    //             dam_small_lock();
+    //
+    //             size_class_header_t* size_class_header = dam_size_class_header_from_ptr(pool_header->block_list, quarantine);
+    //
+    //             result = dam_validate_small_ptr(ptr, is_traced);
+    //             dam_small_unlock();
+    //             break;
+    //
+    //         case DAM_LAYER_GENERAL:
+    //             dam_general_lock();
+    //             result = dam_validate_general_ptr(ptr, pool_header, quarantine, is_traced);
+    //             dam_general_unlock();
+    //             break;
+    //
+    //         case DAM_LAYER_DIRECT:
+    //             dam_direct_lock();
+    //             result = dam_validate_direct_ptr(ptr, is_traced);
+    //             dam_direct_unlock();
+    //             break;
+    //
+    //         default:
+    //             DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", pool_header, pool_header->type);
+    //             break;
+    //     }
+    //
+    //     dam_validate_ptr(pool_header, quarantine, pool_header->is_traced);
+    //
+    //     pool_header = pool_header->next;
+    // }
     return 1;
 }

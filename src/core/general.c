@@ -53,8 +53,6 @@ void* dam_general_malloc_internal(size_t size, const char* trace) {
         }
     }
 
-    stats.allocations++;
-
     DAM_LOG("[ALLOC] Found free block: size=%zu at %p", found_block->size, (void*)found_block);
 
     found_block->is_free = 0;
@@ -126,7 +124,6 @@ void dam_general_free_internal(void* ptr, const pool_header_t* pool_header) {
     block_header->is_free = 1;
 
     coalesce_if_possible(block_header, pool_header);
-    stats.frees++;
     DAM_LOG("[FREE] Pointer %p freed", ptr);
 }
 
@@ -195,7 +192,6 @@ void* dam_general_realloc(void* ptr, size_t size, const char* trace) {
             *end_canary = CANARY_VALUE;
 
             split_block_if_possible(block_header, new_actual_size);
-            stats.coalesces++;
 
             dam_general_unlock();
             return ptr;
@@ -284,7 +280,6 @@ pool_header_t* create_general_pool(size_t min_size) {
 
     dam_register_pool(new_pool);
 
-    stats.pools_created++;
     DAM_LOG("[POOL] Created at %p with %zu bytes usable. Total pools: %zu", memory, new_pool->free_block_list->size, stats.pools_created);
 
     return new_pool;
@@ -306,7 +301,6 @@ block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_po
             blocks_checked++;
             if (current_block->is_free && current_block->size >= actual_size) {
                 *found_pool = current_pool;
-                stats.blocks_searched += blocks_checked;
 
                 return current_block;
             }
@@ -315,7 +309,6 @@ block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_po
         current_pool = current_pool->next;
     }
 
-    stats.blocks_searched += blocks_checked;
     return NULL;
 }
 
@@ -335,8 +328,6 @@ void split_block_if_possible(block_header_t* block_header, size_t actual_size) {
 
         block_header->size = actual_size;
         block_header->next_ptr = new_block_header;
-
-        stats.splits++;
         // DAM_LOG("[SPLIT] Split block: allocated=%zu, remaining=%zu", user_size, new_block_header->size);
     }
 }
@@ -347,7 +338,6 @@ void coalesce_if_possible(block_header_t* block_header, const pool_header_t* poo
         DAM_LOG("[COALESCE] Merging with previous block: %zu + %zu", block_header->prev->size, block_header->size);
         block_header->prev.ptr->size += BLOCK_HEADER_SIZE + block_header->size;
         block_header->prev.ptr->next_ptr = block_header->next_ptr;
-        stats.coalesces++;
 
         if (block_header->next_ptr) block_header->next_ptr->prev.ptr = block_header->prev.ptr;
 
@@ -360,7 +350,6 @@ void coalesce_if_possible(block_header_t* block_header, const pool_header_t* poo
             DAM_LOG("[COALESCE] Merging with next block: %zu + %zu", block_header->size, block_header->next->size);
             block_header->size += BLOCK_HEADER_SIZE + block_header->next_ptr->size;
             block_header->next_ptr = block_header->next_ptr->next_ptr;
-            stats.coalesces++;
 
             if (block_header->next_ptr) block_header->next_ptr->prev.ptr = block_header;
         }
@@ -423,8 +412,13 @@ void dam_general_pressure(pool_header_t* pool, dam_pool_pressure_t* snapshot) {
     dam_general_unlock();
 }
 
-uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t quarantine) {
-    block_header_t* block_header = get_block_header(ptr);
+uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t quarantine, uint8_t is_traced) {
+    block_header_t* block_header;
+    if (is_traced) {
+        block_header = get_block_trace_header(ptr);
+    } else {
+        block_header = get_block_header(ptr);
+    }
 
     if (!block_header->is_free) {
         if (block_header->magic != BLOCK_MAGIC) {

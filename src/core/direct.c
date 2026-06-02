@@ -121,8 +121,13 @@ void dam_snapshot_direct(dam_snapshot_t* snapshot) {
     dam_direct_unlock();
 }
 
-uint8_t dam_validate_direct_ptr(void* ptr) {
-    block_header_t* direct_header = get_direct_header(ptr);
+uint8_t dam_validate_direct_ptr(void* ptr, uint8_t is_traced) {
+    block_header_t* direct_header;
+    if (is_traced) {
+        direct_header = get_direct_trace_header(ptr);
+    } else {
+        direct_header = get_block_header(ptr);
+    }
 
     if (!direct_header->is_free) {
         if (direct_header->magic != BLOCK_MAGIC) {
@@ -140,13 +145,13 @@ uint8_t dam_validate_direct_ptr(void* ptr) {
     return 1;
 }
 
-pool_header_t* direct_pool_from_ptr(void* ptr) {
+inline pool_header_t* direct_pool_from_ptr(void* ptr) {
     return (pool_header_t*)((char*)ptr - sizeof(block_header_t) - sizeof(pool_header_t));
 }
 
-block_header_t* get_direct_header(void* ptr) {
+inline block_header_t* get_direct_header(void* ptr) {
     return (block_header_t*)((char*)ptr - sizeof(block_header_t));
 }
-block_header_t* get_direct_traced_header(void* ptr) {
+inline block_header_t* get_direct_trace_header(void* ptr) {
     return (block_header_t*)((char*)ptr - sizeof(block_header_t) - TRACE_SIZE);
 }

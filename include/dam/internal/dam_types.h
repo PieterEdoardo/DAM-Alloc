@@ -67,15 +67,6 @@ typedef struct {
     size_t deallocations;
 } thread_cache_t;
 
-static struct {
-    size_t allocations;
-    size_t frees;
-    size_t blocks_searched;
-    size_t splits;
-    size_t coalesces;
-    size_t pools_created;
-} stats = {0};
-
 typedef struct {
     size_t tlc_used;
     size_t tlc_free;

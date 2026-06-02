@@ -36,9 +36,8 @@ void  dam_uaf_free();
  * ================================ */
 void    dam_snapshot(dam_snapshot_t* snapshot);
 size_t  dam_fragmentation(dam_pool_fragmentation_t* snapshot_buffer, size_t capacity);
-size_t  dam_pressure(dam_pool_pressure_t* snapshot_buffer, size_t capacity);
 size_t  dam_pool_count();
-uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine);
+uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine, uint8_t is_traced);
 uint8_t dam_validate(uint8_t quarantine);
 dam_layer_type_t dam_layer_for_size(size_t size);
 

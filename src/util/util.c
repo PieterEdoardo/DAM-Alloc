@@ -53,32 +53,3 @@ pool_header_t* dam_pool_from_ptr(void* ptr) {
     }
     return NULL;
 }
-
-
-
-/**********************
- * internal Functions *
- **********************/
-void print_allocator_stats(void) {
-    DAM_LOG("\n=== Allocator Statistics ===");
-    DAM_LOG("Total allocations: %zu", stats.allocations);
-    DAM_LOG("Total frees: %zu", stats.frees);
-    DAM_LOG("Total splits: %zu", stats.splits);
-    DAM_LOG("Total coalesces: %zu", stats.coalesces);
-    DAM_LOG("Pools created: %zu", stats.pools_created);
-
-    if (stats.allocations > 0) {
-        DAM_LOG("Avg blocks searched per allocation: %.2f",
-               (float)stats.blocks_searched / stats.allocations);
-    }
-
-    DAM_LOG("============================\n");
-}
-
-void reset_allocator_stats(void) {
-    stats.allocations = 0;
-    stats.frees = 0;
-    stats.blocks_searched = 0;
-    stats.splits = 0;
-    stats.coalesces = 0;
-}

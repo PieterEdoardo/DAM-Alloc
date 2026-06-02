@@ -76,7 +76,7 @@ static pool_header_t* create_small_pool(uint8_t class_index) {
 
         size_class_header_t* block = (size_class_header_t*)cursor;
 
-        block->magic = FREED_MAGIC;
+        block->magic = SMALL_FREED_MAGIC;
         block->is_free = 1;
         block->size_class_index = class_index;
         block->next = free_class_list;
@@ -92,13 +92,15 @@ static pool_header_t* create_small_pool(uint8_t class_index) {
     }
     size_classes[class_index].free_class_list = free_class_list;
 
-    stats.pools_created++;
     DAM_LOG("[POOL] Created at %p with %zu bytes usable. Total pools: %zu", memory, pool_size, stats.pools_created);
     return new_pool;
 }
 
 // These two functions can be optimized to be O(1) rather then O(n)
-uint8_t size_to_class(size_t size) {
+uint8_t size_to_class(size_t size, uint8_t traced) {
+
+    if (traced) size = size + TRACE_SIZE;
+
     for (size_t i = 0; i < DAM_SIZE_CLASS_COUNT; i++) {
         if (size <= size_classes[i].block_size) {
             return i;
@@ -110,17 +112,11 @@ uint8_t size_to_class(size_t size) {
 }
 
 size_t class_to_size(uint8_t class_index) {
-    for (size_t i = 0; i < DAM_SIZE_CLASS_COUNT; i++) {
-        if (i == class_index) {
-            return size_classes[i].block_size;
-        }
-    }
-
-    return 0;
+        return size_classes[class_index].block_size;
 }
 
 void* dam_small_malloc_internal(size_t size, const char* trace) {
-    uint8_t class = size_to_class(size);
+    uint8_t class = size_to_class(size, trace != NULL ? 1 : 0);
     size_class_t* size_class = &size_classes[class];
 
     if (!size_class->free_class_list && !create_small_pool(class)) {
@@ -131,21 +127,30 @@ void* dam_small_malloc_internal(size_t size, const char* trace) {
     size_class_header_t* block = size_class->free_class_list;
     size_class->free_class_list = block->next;
 
-    stats.allocations++;
     DAM_LOG("[ALLOC] Found free size class block: class=%u (%zuB) block=%p", class, size_class->block_size, (void*)block);
 
     block->is_free = 0;
-    block->magic = BLOCK_MAGIC;
+    block->magic = SMALL_MAGIC;
 
-    void* ptr = (char*)block + SIZE_CLASS_HEADER_SIZE;
+    void* ptr;
 
+    if (trace != NULL) {
+        block->is_traced = 1;
+        char* trace_ptr = (char*)block + SIZE_CLASS_HEADER_SIZE;
+        strncpy(trace_ptr, trace, TRACE_SIZE - 1);
+        trace_ptr[TRACE_SIZE - 1] = '\0';
+
+        ptr = (char*)block + SIZE_CLASS_HEADER_SIZE + TRACE_SIZE;
+    } else {
+        ptr = (char*)block + SIZE_CLASS_HEADER_SIZE;
+    }
     DAM_LOG("[ALLOC] Returning pointer %p", ptr);
 
     return ptr;
 }
 
 void* dam_small_malloc(size_t size, const char* trace) {
-    uint8_t class = size_to_class(size);
+    uint8_t class = size_to_class(size, trace != NULL ? 1 : 0);
 
     // Attempt fast path
     thread_cache_t* tc = dam_get_thread_cache();
@@ -154,15 +159,24 @@ void* dam_small_malloc(size_t size, const char* trace) {
         size_class_header_t* block = tc->bins[class].free_list;
         tc->bins[class].free_list = block->next;
         tc->bins[class].count--;
-        tc->allocations++;
 
         block->is_free = 0;
-        block->magic = BLOCK_MAGIC;
+        block->magic = SMALL_MAGIC;
         block->next = NULL;
 
-        stats.allocations++;
+        if (trace != NULL) {
+            block->is_traced = 1;
+            char* trace_ptr = (char*)block + SIZE_CLASS_HEADER_SIZE;
+            strncpy(trace_ptr, trace, TRACE_SIZE - 1);
+            trace_ptr[TRACE_SIZE - 1] = '\0';
+
+            DAM_LOG("[TCACHE HIT] Returning %p from tcache with trace (class=%u, remaining=%zu)", ptr, class, tc->bins[class].count);
+
+            return (char*)block + SIZE_CLASS_HEADER_SIZE + TRACE_SIZE; // ptr
+        }
 
         void* ptr = (char*)block + SIZE_CLASS_HEADER_SIZE;
+
         DAM_LOG("[TCACHE HIT] Returning %p from tcache (class=%u, remaining=%zu)", ptr, class, tc->bins[class].count);
 
         return ptr;
@@ -195,7 +209,7 @@ void* dam_small_realloc(void* ptr, size_t size, const char* trace) {
     dam_small_lock();
 
     // Not shrink on purpose
-    uint8_t requested_index = size_to_class(size);
+    uint8_t requested_index = size_to_class(size, trace != NULL ? 1 : 0);
     if (requested_index <= current_index) {
         dam_small_unlock();
         return ptr;
@@ -217,20 +231,20 @@ void dam_small_free_internal(void* ptr) {
     size_class_header_t* header = get_size_class_header(ptr);
 
     // Double free checks
-    if (header->magic == FREED_MAGIC) {
+    if (header->magic == SMALL_FREED_MAGIC) {
         DAM_LOG_ERROR("[FREE] Double free detected at %p!", ptr);
         return;
     }
 
     // Invalid pointer checks
-    if (header->magic != BLOCK_MAGIC) {
+    if (header->magic != SMALL_MAGIC) {
         DAM_LOG_ERROR("[FREE] Invalid pointer passed to dam_free: %p", ptr);
         return;
     }
 
     uint8_t class = header->size_class_index;
     header->is_free = 1;
-    header->magic = FREED_MAGIC;
+    header->magic = SMALL_FREED_MAGIC;
 
     header->next = size_classes[class].free_class_list;
     size_classes[class].free_class_list = header;
@@ -243,15 +257,14 @@ void dam_small_free(void* ptr) {
     uint8_t class = header->size_class_index;
 
     // Attempt fast path.
-    thread_cache_t* tc = dam_get_thread_cache();
-    if (tc && tc->bins[class].count < THREAD_CACHE_MAX_BLOCKS_PER_CLASS) {
+    thread_cache_t* thread_cache = dam_get_thread_cache();
+    if (thread_cache && thread_cache->bins[class].count < THREAD_CACHE_MAX_BLOCKS_PER_CLASS) {
 
         header->is_free = 1;
-        header->magic = FREED_MAGIC;
-        header->next = tc->bins[class].free_list;
-        tc->bins[class].free_list = header;
-        tc->bins[class].count++;
-        tc->deallocations++;
+        header->magic = SMALL_FREED_MAGIC;
+        header->next = thread_cache->bins[class].free_list;
+        thread_cache->bins[class].free_list = header;
+        thread_cache->bins[class].count++;
 
         DAM_LOG("[TCACHE] Cached block %p (class=%u, cached=%zu/%d)", ptr, class, tc->bins[class].count, THREAD_CACHE_MAX_BLOCKS_PER_CLASS);
 
@@ -264,6 +277,9 @@ void dam_small_free(void* ptr) {
     dam_small_lock();
     dam_small_free_internal(ptr);
     dam_small_unlock();
+}
+inline size_class_header_t* get_size_class_trace_header(void* ptr) {
+    return (size_class_header_t*)((char*)ptr - SIZE_CLASS_HEADER_SIZE - TRACE_SIZE);
 }
 
 inline size_class_header_t* get_size_class_header(void* ptr) {
@@ -295,13 +311,19 @@ void dam_snapshot_small(dam_snapshot_t* snapshot) {
     dam_small_unlock();
 }
 
-uint8_t dam_validate_small_ptr(void* ptr) {
-    size_class_header_t* size_class = get_size_class_header(ptr);
+uint8_t dam_validate_small_ptr(void* ptr, uint8_t is_traced) {
+    size_class_header_t* size_class;
+    if (is_traced) {
+        size_class = get_size_class_trace_header(ptr);
+    } else {
+        size_class = get_size_class_header(ptr);
+    }
+
     if (!size_class) {
         DAM_LOG_VALID_ERROR("Pointer size class metadata is so damaged, header data could not be retrieved: %p", ptr);
         return 0;
     }
-    if (size_class->size_class_index < DAM_SIZE_CLASS_COUNT - 1 || size_class->size_class_index > DAM_SIZE_CLASS_COUNT - 1) {
+    if (size_class->size_class_index < DAM_SIZE_CLASS_COUNT - DAM_SIZE_CLASS_COUNT || size_class->size_class_index > DAM_SIZE_CLASS_COUNT - 1) {
         DAM_LOG_VALID_ERROR("Pointer size class index is out of bounds: %p, index %hhu", ptr, size_class->size_class_index);
         return 0;
     }
@@ -313,10 +335,14 @@ uint8_t dam_validate_small_ptr(void* ptr) {
         }
     } else {
         DAM_LOG("Pointer size class is free: %p", ptr);
-        if (size_class->magic != FREED_MAGIC) {
+        if (size_class->magic != SMALL_FREED_MAGIC) {
             DAM_LOG_VALID_ERROR("Pointer size class free magic does not match: %p, magic %d", ptr, size_class->magic);
             return 0;
         }
     }
     return 1;
+}
+
+inline char* get_small_trace(void* ptr) {
+    return (char*)ptr - TRACE_SIZE;
 }

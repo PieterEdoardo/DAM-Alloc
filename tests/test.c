@@ -452,17 +452,16 @@ static void test_quarantine(void) {
     void* b = dam_malloc(1000);
     void* c = dam_malloc(1000);
 
-    char* p = (char*)a;
 
-    memset(p, 'A', 1100);
+    memset(a, 'A', 1100);
 
-    dam_validate_ptr(a, 1);
-    dam_validate_ptr(b, 1);
-    dam_validate_ptr(c, 1);
+    dam_validate_ptr(a, 1, 0);
+    dam_validate_ptr(b, 1, 0);
+    dam_validate_ptr(c, 1, 0);
 
     void* d = dam_malloc(1000);
 
-    dam_validate_ptr(d, 1);
+    dam_validate_ptr(d, 1, 0);
 
     c = dam_realloc(c, 1000);
 
@@ -470,11 +469,13 @@ static void test_quarantine(void) {
 }
 
 static void test_tracing(void) {
-    size_t* a = dam_trace_malloc(KiB(1), "tag:user_123");
+    size_t* a = dam_trace_malloc(32, "tag:user_123");
 
     *a = 414141414141414141;
 
     char* trace = dam_get_trace(a);
+
+    dam_validate_ptr(a, 1, 1);
 
     printf("Traced value: %s\n", trace);
 
