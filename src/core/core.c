@@ -26,11 +26,9 @@ int initialized = 0;
 int dam_init(void) {
     if (initialized) return 0;
 
-    if (!verify_page_size()) {
-        return 1;
-    }
+    if (!verify_page_size()) return 1;
 
-    DAM_LOG("[INIT] Initializing multi-threading...");
+    DAM_LOG("[INIT] Initializing multi-threading and thread local cache...");
     dam_thread_init();
 
     DAM_LOG("[INIT] Initializing size class allocator...");
@@ -171,6 +169,7 @@ void* dam_trace_realloc(void* ptr, size_t size, const char* trace) {
             return NULL;
     }
 }
+
 char* dam_get_trace(void* ptr) {
      pool_header_t* pool = dam_pool_from_ptr(ptr);
 
@@ -193,6 +192,15 @@ char* dam_get_trace(void* ptr) {
             DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
             return NULL;
     }
+}
+
+/*
+ * Dangerous function, if passed pointer is not traced, it will corrupt the entire memory block and make in unusable
+ * This function is only intended as a useful wrapper, it's recommended to do this manually to prevent corruption.
+ */
+inline void dam_set_trace(void* ptr, const char* trace) {
+    strncpy((char*)ptr - TRACE_SIZE, trace, TRACE_SIZE - 1);
+    ((char*)ptr - 1)[0] = '\0';
 }
 
 void dam_uaf_free(void* ptr) {

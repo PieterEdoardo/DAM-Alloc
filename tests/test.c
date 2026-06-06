@@ -18,6 +18,7 @@
 #include "dam/dam.h"
 #include "dam/dam_log.h"
 #include "dam/internal/dam_internal.h"
+#include "dam/dam_config.h"
 
 /* ------------------------------------------------------------------ */
 /* Tunables                                                             */
@@ -471,13 +472,24 @@ static void test_quarantine(void) {
 static void test_tracing(void) {
     size_t* a = dam_trace_malloc(32, "tag:user_123");
 
+
     *a = 414141414141414141;
 
     char* trace = dam_get_trace(a);
 
-    dam_validate_ptr(a, 1, 1);
 
     printf("Traced value: %s\n", trace);
+    printf("ptr %p", a);
+    strncpy((char*)a - TRACE_SIZE, "tag:changed", TRACE_SIZE - 1);
+    ((char*)a - 1)[0] = '\0';
+    // size_t* b = dam_trace_realloc(a, 200, "tag:user_123");
+
+    printf("Traced value: %s\n", (char*)dam_get_trace(a));
+    printf("ptr %p", a);
+
+
+
+    dam_validate_ptr(a, 1, 1);
 
     printf("PASS\n\n");
 }
