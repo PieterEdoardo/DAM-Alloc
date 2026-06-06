@@ -47,7 +47,7 @@ static void thread_cache_destructor(void* cache_ptr) {
         pthread_self(), tc->allocations);
 
     for (size_t class_idx = 0; class_idx < DAM_SIZE_CLASS_COUNT; class_idx++) {
-        size_class_header_t* block = tc->bins[class_idx].free_list;
+        size_class_header_t* block = tc->tc_bins[class_idx].free_list;
 
         while (block) {
             size_class_header_t* next = block->next;

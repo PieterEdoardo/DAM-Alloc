@@ -142,7 +142,13 @@ void dam_general_free(void* ptr, pool_header_t* pool_header) {
 }
 
 void* dam_general_realloc(void* ptr, size_t size, const char* trace) {
-    block_header_t* block_header = get_block_header(ptr);
+    block_header_t* block_header;
+    if (trace == NULL) {
+        block_header = get_block_header(ptr);
+    } else {
+        block_header = get_block_trace_header(ptr);
+    }
+
     size_t new_actual_size = align_up(size + sizeof(uint32_t), ALIGNMENT);
     uint8_t quarantine = 0;
 
@@ -200,7 +206,7 @@ void* dam_general_realloc(void* ptr, size_t size, const char* trace) {
 
     // Case 3 Grow in-place but no next block is not free, so copy and free
     dam_general_unlock();
-    void* new_ptr = dam_malloc(size);
+    void* new_ptr = dam_trace_malloc(size, trace); // always traced call, even if trace is NULL.
     if (new_ptr) {
         size_t copy_size = (block_header->user_size < size) ? block_header->user_size : size;
         memcpy(new_ptr, ptr, copy_size);

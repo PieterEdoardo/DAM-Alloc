@@ -153,12 +153,12 @@ void* dam_small_malloc(size_t size, const char* trace) {
     uint8_t class = size_to_class(size, trace != NULL ? 1 : 0);
 
     // Attempt fast path
-    thread_cache_t* tc = dam_get_thread_cache();
-    if ( tc && tc->bins[class].free_list) {
+    thread_cache_t* thread_cache = dam_get_thread_cache();
+    if ( thread_cache && thread_cache->tc_bins[class].free_list) {
         // Cache hit!
-        size_class_header_t* block = tc->bins[class].free_list;
-        tc->bins[class].free_list = block->next;
-        tc->bins[class].count--;
+        size_class_header_t* block = thread_cache->tc_bins[class].free_list;
+        thread_cache->tc_bins[class].free_list = block->next;
+        thread_cache->tc_bins[class].count--;
 
         block->is_free = 0;
         block->magic = SMALL_MAGIC;
@@ -258,13 +258,13 @@ void dam_small_free(void* ptr) {
 
     // Attempt fast path.
     thread_cache_t* thread_cache = dam_get_thread_cache();
-    if (thread_cache && thread_cache->bins[class].count < THREAD_CACHE_MAX_BLOCKS_PER_CLASS) {
+    if (thread_cache && thread_cache->tc_bins[class].count < THREAD_CACHE_MAX_BLOCKS_PER_CLASS) {
 
         header->is_free = 1;
         header->magic = SMALL_FREED_MAGIC;
-        header->next = thread_cache->bins[class].free_list;
-        thread_cache->bins[class].free_list = header;
-        thread_cache->bins[class].count++;
+        header->next = thread_cache->tc_bins[class].free_list;
+        thread_cache->tc_bins[class].free_list = header;
+        thread_cache->tc_bins[class].count++;
 
         DAM_LOG("[TCACHE] Cached block %p (class=%u, cached=%zu/%d)", ptr, class, tc->bins[class].count, THREAD_CACHE_MAX_BLOCKS_PER_CLASS);
 
@@ -295,7 +295,7 @@ void dam_small_free_to_central(void* ptr) {
 void dam_snapshot_small(dam_snapshot_t* snapshot) {
     thread_cache_t* tlc = dam_get_current_thread_cache();
     for (size_t class = 0; class < DAM_SIZE_CLASS_COUNT; class++) {
-        snapshot->tlc_used += tlc->bins[class].count;
+        snapshot->tlc_used += tlc->tc_bins[class].count;
     }
     snapshot->tlc_free = (DAM_SIZE_CLASS_COUNT * THREAD_CACHE_MAX_BLOCKS_PER_CLASS) - snapshot->tlc_used;
     snapshot->size_classes = DAM_SIZE_CLASS_COUNT;
