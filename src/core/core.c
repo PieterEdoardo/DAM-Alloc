@@ -130,7 +130,7 @@ void dam_free(void* ptr) {
 * Memory diagnostics and security suite
 ***********************************************************/
 
-void* dam_trace_malloc(size_t size, char* trace) {
+void* dam_trace_malloc(size_t size, const char* trace) {
 
     if (!initialized) dam_init();
 
@@ -140,7 +140,7 @@ void* dam_trace_malloc(size_t size, char* trace) {
     return dam_direct_malloc(size, trace);
 }
 
-void* dam_trace_realloc(void* ptr, size_t size, char* trace) {
+void* dam_trace_realloc(void* ptr, size_t size, const char* trace) {
     if (!ptr) return dam_malloc(size);
 
     if (size == 0) {
