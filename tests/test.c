@@ -470,7 +470,12 @@ static void test_quarantine(void) {
 }
 
 static void test_tracing(void) {
-    size_t* a = dam_trace_malloc(32, "tag:user_123");
+    size_t size_a = 1;
+    size_t size_b = MiB(2);
+    size_t* a = dam_trace_malloc(size_a, "tag:user_123");
+    printf("Malloc to layer: %d\n", dam_layer_for_size(size_a));
+    printf("Malloc to class: %d\n", size_to_class(size_a, 1));
+    size_t* a_blocked = dam_malloc(size_a);
 
 
     *a = 414141414141414141;
@@ -478,14 +483,16 @@ static void test_tracing(void) {
     char* trace = dam_get_trace(a);
 
 
-    printf("Traced value: %s\n", trace);
-    printf("ptr %p", a);
-    strncpy((char*)a - TRACE_SIZE, "tag:changed", TRACE_SIZE - 1);
-    ((char*)a - 1)[0] = '\0';
-    // size_t* b = dam_trace_realloc(a, 200, "tag:user_123");
+    printf("Traced value: %s\n", dam_get_trace(a));
+    printf("ptr %p\n", a);
+    // strncpy((char*)a - TRACE_SIZE, "tag:changed", TRACE_SIZE - 1);
+    // ((char*)a - 1)[0] = '\0';
+    printf("Realloc to layer: %d\n", dam_layer_for_size(size_b));
+    printf("Realloc to class: %d\n", size_to_class(size_b, 1));
+    size_t* b = dam_trace_realloc(a, size_b);
 
-    printf("Traced value: %s\n", (char*)dam_get_trace(a));
-    printf("ptr %p", a);
+    printf("Traced value: %s\n", dam_get_trace(b));
+    printf("ptr %p\n", b);
 
 
 

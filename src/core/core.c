@@ -77,13 +77,16 @@ void* dam_realloc(void* ptr, size_t size) {
 
     switch (pool->type) {
         case DAM_LAYER_SMALL:
-            return dam_small_realloc(ptr, size, NULL);
+            size_class_header_t* size_class_header = get_size_class_header(ptr);
+            return dam_small_realloc(ptr, size, size_class_header, NULL);
 
-        case DAM_LAYER_GENERAL:
-            return dam_general_realloc(ptr, size, NULL);
-
+        case DAM_LAYER_GENERAL: {
+            block_header_t* block_header = get_block_header(ptr);
+            return dam_general_realloc(ptr, size, block_header, NULL);
+        }
         case DAM_LAYER_DIRECT:
-            return dam_direct_realloc(ptr, size, NULL);
+            block_header_t* direct_header = get_direct_header(ptr);
+            return dam_direct_realloc(ptr, size, direct_header, NULL);
 
         default:
             DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
@@ -138,7 +141,7 @@ void* dam_trace_malloc(size_t size, const char* trace) {
     return dam_direct_malloc(size, trace);
 }
 
-void* dam_trace_realloc(void* ptr, size_t size, const char* trace) {
+void* dam_trace_realloc(void* ptr, size_t size) {
     if (!ptr) return dam_malloc(size);
 
     if (size == 0) {
@@ -153,41 +156,20 @@ void* dam_trace_realloc(void* ptr, size_t size, const char* trace) {
         return NULL;
     }
 
-    // none of this works yet
+    char* trace = dam_get_trace(ptr);
     switch (pool->type) {
-        case DAM_LAYER_SMALL:
-            return dam_small_realloc(ptr, size, trace);
-
-        case DAM_LAYER_GENERAL:
-            return dam_general_realloc(ptr, size, trace);
-
-        case DAM_LAYER_DIRECT:
-            return dam_direct_realloc(ptr, size, trace);
-
-        default:
-            DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
-            return NULL;
-    }
-}
-
-char* dam_get_trace(void* ptr) {
-     pool_header_t* pool = dam_pool_from_ptr(ptr);
-
-    if (!pool) {
-        DAM_LOG_ERROR("[TRACE] Pointer does not belong to DAM: %p", ptr);
-        return NULL;
-    }
-
-    switch (pool->type) {
-        case DAM_LAYER_SMALL:
-            return get_small_trace(ptr);
-
-        case DAM_LAYER_GENERAL:
-            return get_general_trace(ptr);
-
-        case DAM_LAYER_DIRECT:
-            return get_direct_trace(ptr);
-
+        case DAM_LAYER_SMALL: {
+            size_class_header_t* size_class_header = get_size_class_header(ptr);
+            return dam_small_realloc(ptr, size, size_class_header, trace);
+        }
+        case DAM_LAYER_GENERAL: {
+            block_header_t* block_header = get_block_trace_header(ptr);
+            return dam_general_realloc(ptr, size, block_header, trace);
+        }
+        case DAM_LAYER_DIRECT: {
+            block_header_t* direct_header = get_direct_trace_header(ptr);
+            return dam_direct_realloc(ptr, size, direct_header, trace);
+        }
         default:
             DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
             return NULL;

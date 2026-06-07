@@ -48,10 +48,6 @@ void* dam_direct_malloc_internal(size_t size, const char* trace) {
     return (char*)block_header + BLOCK_HEADER_SIZE;
 }
 
-char* get_direct_trace(void* ptr) {
-    return (char*)ptr - TRACE_SIZE;
-}
-
 void  dam_direct_free_internal(void* ptr) {
     if (!ptr) return;
 
@@ -75,10 +71,8 @@ void  dam_direct_free(void* ptr) {
     dam_direct_unlock();
 }
 
-void* dam_direct_realloc(void* ptr, size_t size, const char* trace) {
-    block_header_t* block_header = get_direct_header(ptr);
-    size_t old_size = block_header->size;
-
+void* dam_direct_realloc(void* ptr, size_t size, const block_header_t* direct_header, const char* trace) {
+    size_t old_size = direct_header->size;
 
     // Case 1 Shrink to lower layer
     void* new_ptr;
@@ -94,7 +88,7 @@ void* dam_direct_realloc(void* ptr, size_t size, const char* trace) {
     dam_direct_lock();
 
     // Case 2/3 stay inside direct
-    if (size *  100 <= old_size * DAM_DIRECT_SHRINK_PERCENTAGE || size > block_header->size) {
+    if (size *  100 <= old_size * DAM_DIRECT_SHRINK_PERCENTAGE || size > direct_header->size) {
         new_ptr = dam_direct_malloc_internal(size, trace);
         if (new_ptr) {
             memcpy(new_ptr, ptr, old_size < size ? old_size : size);
@@ -152,6 +146,7 @@ inline pool_header_t* direct_pool_from_ptr(void* ptr) {
 inline block_header_t* get_direct_header(void* ptr) {
     return (block_header_t*)((char*)ptr - sizeof(block_header_t));
 }
+
 inline block_header_t* get_direct_trace_header(void* ptr) {
     return (block_header_t*)((char*)ptr - sizeof(block_header_t) - TRACE_SIZE);
 }

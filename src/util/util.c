@@ -53,3 +53,7 @@ pool_header_t* dam_pool_from_ptr(void* ptr) {
     }
     return NULL;
 }
+
+char* dam_get_trace(void* ptr) {
+    return (char*)(ptr - TRACE_SIZE);
+}

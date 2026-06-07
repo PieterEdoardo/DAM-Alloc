@@ -36,7 +36,6 @@ typedef struct block_header {
     uint32_t magic;
     uint8_t is_free;
     uint8_t is_traced;
-    char trace[TRACE_SIZE];
 } block_header_t;
 
 

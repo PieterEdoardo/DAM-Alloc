@@ -49,8 +49,8 @@ block_header_t* get_direct_header(void* ptr);
 block_header_t* get_direct_trace_header(void* ptr);
 char* get_small_trace(void* ptr);
 char* get_general_trace(void* ptr);
-char* get_direct_trace(void* ptr);
 size_t class_to_size(uint8_t class_index);
+uint8_t size_to_class(size_t size, uint8_t traced);
 
 
 /* allocator entry points */
@@ -66,9 +66,9 @@ void dam_small_free(void* ptr);
 void dam_general_free(void* ptr, pool_header_t* pool_header);
 void dam_direct_free(void* ptr);
 
-void* dam_small_realloc(void* ptr, size_t size, const char* trace);
-void* dam_general_realloc(void* ptr, size_t size, const char* trace);
-void* dam_direct_realloc(void* ptr, size_t size, const char* trace);
+void* dam_small_realloc(void* ptr, size_t size, const size_class_header_t* size_class_header, const char* trace);
+void* dam_general_realloc(void* ptr, size_t size, block_header_t* block_header, const char* trace);
+void* dam_direct_realloc(void* ptr, size_t size, const block_header_t* direct_header, const char* trace);
 
 // Multi-threading
 void dam_small_lock(void);

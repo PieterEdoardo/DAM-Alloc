@@ -27,7 +27,7 @@ void dam_shutdown(void);
  * Diagnostics API
  * ================================ */
 void* dam_trace_malloc(size_t size, const char* trace);
-void* dam_trace_realloc(void*, size_t size, const char* trace);
+void* dam_trace_realloc(void*, size_t size);
 char* dam_get_trace(void* ptr);
 void  dam_set_trace(void* ptr, const char* trace);
 void  dam_uaf_free();

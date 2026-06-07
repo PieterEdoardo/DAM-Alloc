@@ -64,6 +64,8 @@ void* dam_general_malloc_internal(size_t size, const char* trace) {
 
     // Trace allocation!
     if (trace != NULL) {
+    // printf("*dam_trace_malloc() trace: %s*\n" , trace);
+
         found_block->is_traced = 1;
         char* trace_ptr = (char*)found_block + BLOCK_HEADER_SIZE;
         strncpy(trace_ptr, trace, TRACE_SIZE - 1);
@@ -141,14 +143,7 @@ void dam_general_free(void* ptr, pool_header_t* pool_header) {
     dam_general_unlock();
 }
 
-void* dam_general_realloc(void* ptr, size_t size, const char* trace) {
-    block_header_t* block_header;
-    if (trace == NULL) {
-        block_header = get_block_header(ptr);
-    } else {
-        block_header = get_block_trace_header(ptr);
-    }
-
+void* dam_general_realloc(void* ptr, size_t size, block_header_t* block_header, const char* trace) {
     size_t new_actual_size = align_up(size + sizeof(uint32_t), ALIGNMENT);
     uint8_t quarantine = 0;
 
@@ -200,6 +195,7 @@ void* dam_general_realloc(void* ptr, size_t size, const char* trace) {
             split_block_if_possible(block_header, new_actual_size);
 
             dam_general_unlock();
+
             return ptr;
         }
     }
@@ -334,7 +330,7 @@ void split_block_if_possible(block_header_t* block_header, size_t actual_size) {
 
         block_header->size = actual_size;
         block_header->next_ptr = new_block_header;
-        // DAM_LOG("[SPLIT] Split block: allocated=%zu, remaining=%zu", user_size, new_block_header->size);
+        DAM_LOG("[SPLIT] Split block: allocated=%zu, remaining=%zu", user_size, new_block_header->size);
     }
 }
 

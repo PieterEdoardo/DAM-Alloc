@@ -190,15 +190,14 @@ void* dam_small_malloc(size_t size, const char* trace) {
     return ptr;
 }
 
-void* dam_small_realloc(void* ptr, size_t size, const char* trace) {
-    size_class_header_t* header = get_size_class_header(ptr);
-    uint8_t current_index = header->size_class_index;
+void* dam_small_realloc(void* ptr, size_t size, const size_class_header_t* size_class_header, const char* trace) {
+    uint8_t current_index = size_class_header->size_class_index;
 
     // Check if cross layer before locking
     if (size > DAM_SMALL_MAX) {
         size_t copy_size = size_classes[current_index].block_size;
 
-        void* new_ptr = dam_malloc(size); // Locks accounted for.
+        void* new_ptr = dam_trace_malloc(size, trace); // Locks accounted for.
         if (new_ptr) {
             memcpy(new_ptr, ptr, copy_size);
             dam_free(ptr);
@@ -210,7 +209,7 @@ void* dam_small_realloc(void* ptr, size_t size, const char* trace) {
 
     // Not shrink on purpose
     uint8_t requested_index = size_to_class(size, trace != NULL ? 1 : 0);
-    if (requested_index <= current_index) {
+    if (size_classes[requested_index].block_size <= size_classes[current_index].block_size) {
         dam_small_unlock();
         return ptr;
     }
