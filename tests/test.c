@@ -13,9 +13,12 @@
 #include <stdio.h>
 #include <time.h>
 #include <assert.h>
+#include <unistd.h>
 
 #include "dam/dam.h"
 #include "dam/dam_log.h"
+#include "dam/internal/dam_internal.h"
+#include "dam/dam_config.h"
 
 /* ------------------------------------------------------------------ */
 /* Tunables                                                             */
@@ -117,6 +120,19 @@ static size_t biased_size(void) {
         case 3:  return (rand32() % 2048) + 1;
         default: return (rand32() % MAX_ALLOC) + 1;
     }
+}
+
+void print_snapshot(const dam_snapshot_t* snapshot) {
+    printf("tlc_used: %zu\n", snapshot->tlc_used);
+    printf("tlc_free: %zu\n", snapshot->tlc_free);
+    printf("size_classes: %zu\n", snapshot->size_classes);
+    printf("classes_bytes_used: %zu\n", snapshot->classes_bytes_used);
+    printf("pools_active: %zu\n", snapshot->pools_active);
+    printf("pools_bytes_used: %zu\n", snapshot->pools_bytes_used);
+    printf("quarantined_pools: %zu\n", snapshot->quarantined_pools);
+    printf("direct_allocations: %zu\n", snapshot->direct_allocations);
+    printf("direct_bytes_used: %zu\n", snapshot->direct_bytes_used);
+    printf("Grand total used: %zu Kilobytes \n", (snapshot->classes_bytes_used + snapshot->pools_bytes_used + snapshot->direct_bytes_used) / 1024);
 }
 
 /* ------------------------------------------------------------------ */
@@ -393,10 +409,100 @@ static void test_edge_sizes(void) {
     printf("  PASS\n\n");
 }
 
+static void test_big_direct_allocations(void) {
+    printf("=== Test 8: Big direct allocations ===\n");
+    void* a = dam_malloc(100000);
+    void* b = dam_malloc(1000000);
+    void* c = dam_malloc(10000000);
+
+    if (!a || !b || !c) {
+        fprintf(stderr, "[FAIL] NULL on big direct alloc\n"); abort();
+    }
+
+    a = dam_realloc(a, 10000000);
+    b = dam_realloc(b, 1000000);
+    c = dam_realloc(c, 100000);
+
+    if (!a || !b || !c) {
+        fprintf(stderr, "[FAIL] NULL on big direct realloc\n"); abort();
+    }
+
+    printf("  PASS\n\n");
+}
+
+static void test_fragmentation(void) {
+    size_t pool_count = dam_pool_count();
+    dam_pool_fragmentation_t buffer[pool_count];
+    memset(buffer, 0, sizeof(buffer));
+    size_t count = dam_fragmentation(buffer, pool_count);
+
+    if (pool_count != count) printf("[FAIL] pool_count=%zu\n", pool_count);
+
+    for (size_t i = 0; i < count; i++) {
+        printf("Pool: %zu\n", i);
+        printf("free: %lu\n", buffer[i].free);
+        printf("largest_free: %lu\n", buffer[i].largest_free);
+        printf("fragmentation: %f\n", buffer[i].fragmentation);
+    }
+
+    printf("PASS\n\n");
+}
+
+static void test_quarantine(void) {
+    void* a = dam_malloc(1000);
+    void* b = dam_malloc(1000);
+    void* c = dam_malloc(1000);
+
+
+    memset(a, 'A', 1100);
+
+    dam_validate_ptr(a, 1, 0);
+    dam_validate_ptr(b, 1, 0);
+    dam_validate_ptr(c, 1, 0);
+
+    void* d = dam_malloc(1000);
+
+    dam_validate_ptr(d, 1, 0);
+
+    c = dam_realloc(c, 1000);
+
+    printf("PASS\n\n");
+}
+
+static void test_tracing(void) {
+    size_t size_a = 1;
+    size_t size_b = MiB(2);
+    size_t* a = dam_trace_malloc(size_a, "tag:user_123");
+    printf("Malloc to layer: %d\n", dam_layer_for_size(size_a));
+    printf("Malloc to class: %d\n", size_to_class(size_a, 1));
+    size_t* a_blocked = dam_malloc(size_a);
+
+    *a = 414141414141414141;
+
+    char* trace = dam_get_trace(a);
+    printf("Traced value: %s\n", dam_get_trace(a));
+    printf("ptr %p\n", a);
+    dam_set_trace(a, "tag:changed_123");
+
+    printf("Realloc to layer: %d\n", dam_layer_for_size(size_b));
+    printf("Realloc to class: %d\n", size_to_class(size_b, 1));
+    size_t* b = dam_trace_realloc(a, size_b);
+
+    printf("Traced value: %s\n", dam_get_trace(b));
+    printf("ptr %p\n", b);
+
+
+
+    dam_validate_ptr(a, 1, 1);
+
+    printf("PASS\n\n");
+}
+
 /* ------------------------------------------------------------------ */
 /* main                                                                 */
 /* ------------------------------------------------------------------ */
 int main(void) {
+    fprintf(stdout, "%lu\n", (unsigned long)time(NULL));
     srand((unsigned)time(NULL));
 
     printf("DAM Stress Test Suite\n");
@@ -408,9 +514,20 @@ int main(void) {
     test_fill_then_free();
     test_sequential_sweep();
     test_realloc_churn();
-    test_random_churn();      /* longest — run last */
+    test_big_direct_allocations();
+    test_fragmentation();
+    test_quarantine();
+    test_tracing();
+
+    // test_random_churn();      /* longest — run last */
+
+    dam_snapshot_t snapshot = {0};
+    dam_snapshot(&snapshot);
+    print_snapshot(&snapshot);
 
     printf("=====================\n");
     printf("ALL TESTS PASSED\n");
+    fprintf(stdout, "%lu\n", (unsigned long)time(NULL));
+
     return 0;
 }

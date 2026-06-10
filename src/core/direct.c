@@ -10,7 +10,7 @@
 
 void  dam_direct_init(void) {}
 
-void* dam_direct_malloc_internal(size_t size) {
+void* dam_direct_malloc_internal(size_t size, const char* trace) {
     size_t total = align_up(sizeof(pool_header_t) +sizeof(block_header_t) + size, PAGE_SIZE);
 
     void* memory = mmap(
@@ -26,7 +26,7 @@ void* dam_direct_malloc_internal(size_t size) {
         return NULL;
 
     pool_header_t* pool_header = memory;
-    pool_header->type = DAM_POOL_DIRECT;
+    pool_header->type = DAM_LAYER_DIRECT;
     pool_header->size = total;
     pool_header->memory = memory;
 
@@ -36,7 +36,16 @@ void* dam_direct_malloc_internal(size_t size) {
     block_header->size = size;
     block_header->magic = BLOCK_MAGIC;
 
-    return block_header + 1;
+    if (trace != NULL) {
+        block_header->is_traced = 1;
+        char* trace_ptr = (char*)block_header + BLOCK_HEADER_SIZE;
+        strncpy(trace_ptr, trace, TRACE_SIZE - 1);
+        trace_ptr[TRACE_SIZE - 1] = '\0';
+
+        return (char*)block_header + BLOCK_HEADER_SIZE + TRACE_SIZE;
+    }
+
+    return (char*)block_header + BLOCK_HEADER_SIZE;
 }
 
 void  dam_direct_free_internal(void* ptr) {
@@ -48,9 +57,9 @@ void  dam_direct_free_internal(void* ptr) {
     munmap(pool_header, pool_header->size);
 }
 
-void* dam_direct_malloc(size_t size) {
+void* dam_direct_malloc(size_t size, const char* trace) {
     dam_direct_lock();
-    void* ptr = dam_direct_malloc_internal(size);
+    void* ptr = dam_direct_malloc_internal(size, trace);
     dam_direct_unlock();
 
     return ptr;
@@ -62,10 +71,8 @@ void  dam_direct_free(void* ptr) {
     dam_direct_unlock();
 }
 
-void* dam_direct_realloc(void* ptr, size_t size) {
-    block_header_t* block_header = direct_block_from_ptr(ptr);
-    size_t old_size = block_header->size;
-
+void* dam_direct_realloc(void* ptr, size_t size, const block_header_t* direct_header, const char* trace) {
+    size_t old_size = direct_header->size;
 
     // Case 1 Shrink to lower layer
     void* new_ptr;
@@ -81,8 +88,8 @@ void* dam_direct_realloc(void* ptr, size_t size) {
     dam_direct_lock();
 
     // Case 2/3 stay inside direct
-    if (size *  100 <= old_size * DAM_DIRECT_SHRINK_PERCENTAGE || size > block_header->size) {
-        new_ptr = dam_direct_malloc_internal(size);
+    if (size *  100 <= old_size * DAM_DIRECT_SHRINK_PERCENTAGE || size > direct_header->size) {
+        new_ptr = dam_direct_malloc_internal(size, trace);
         if (new_ptr) {
             memcpy(new_ptr, ptr, old_size < size ? old_size : size);
             dam_direct_free_internal(ptr);
@@ -95,10 +102,45 @@ void* dam_direct_realloc(void* ptr, size_t size) {
     return ptr;
 }
 
-pool_header_t* direct_pool_from_ptr(void* ptr) {
+void dam_snapshot_direct(dam_snapshot_t* snapshot) {
+    pool_header_t* current = dam_pool_list;
+    dam_direct_lock();
+    while (current) {
+        if (current->type == DAM_LAYER_DIRECT) {
+            snapshot->direct_allocations++;
+            snapshot->direct_bytes_used += current->size;
+        }
+        current = current->next;
+    }
+    dam_direct_unlock();
+}
+
+uint8_t dam_validate_direct_ptr(void* ptr, const block_header_t* direct_header) {
+
+    if (!direct_header->is_free) {
+        if (direct_header->magic != BLOCK_MAGIC) {
+            DAM_LOG_VALID_ERROR("Pointer direct magic does not match: %p, magic %d", ptr, direct_header->magic);
+            return 0;
+        }
+    } else {
+        DAM_LOG("Pointer size class is free: %p", ptr);
+        if (direct_header->magic != FREED_MAGIC) {
+            DAM_LOG_VALID_ERROR("Pointer direct free magic does not match: %p, magic %d", ptr, direct_header->magic);
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+inline pool_header_t* direct_pool_from_ptr(void* ptr) {
     return (pool_header_t*)((char*)ptr - sizeof(block_header_t) - sizeof(pool_header_t));
 }
 
-block_header_t* direct_block_from_ptr(void* ptr) {
+inline block_header_t* get_direct_header(void* ptr) {
     return (block_header_t*)((char*)ptr - sizeof(block_header_t));
+}
+
+inline block_header_t* get_direct_trace_header(void* ptr) {
+    return (block_header_t*)((char*)ptr - sizeof(block_header_t) - TRACE_SIZE);
 }

@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
+#include "internal/dam_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -10,7 +12,6 @@ extern "C" {
 /* ================================
  * Core allocation API
  * ================================ */
-
 void* dam_malloc(size_t size);
 void  dam_free(void* ptr);
 void* dam_realloc(void* ptr, size_t size);
@@ -19,15 +20,34 @@ void* dam_calloc(size_t nmemb, size_t size);
 /* ================================
  * Lifecycle
  * ================================ */
-
-int   dam_init(void);
-void  dam_shutdown(void);
+int  dam_init(void);
+void dam_shutdown(void);
 
 /* ================================
- * Stats
+ * Validation API
  * ================================ */
+void* dam_trace_malloc(size_t size, const char* trace);
+void* dam_trace_realloc(void*, size_t size);
+char* dam_get_trace(void* ptr);
+void  dam_set_trace(void* ptr, const char* trace);
+void  dam_uaf_free(void* ptr);
 
-#include "dam_stats.h"
+/* ================================
+ * Dangerous API
+ * ================================ */
+void* dam_force_fix_ptr(void* ptr);
+void  dam_return_quarantine_pool(void* ptr);
+void  dam_return_all_quarantine_pools();
+
+/* ================================
+ * Diagnostics API
+ * ================================ */
+void    dam_snapshot(dam_snapshot_t* snapshot);
+size_t  dam_fragmentation(dam_pool_fragmentation_t* snapshot_buffer, size_t capacity);
+size_t  dam_pool_count();
+uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine, uint8_t is_traced);
+uint8_t dam_validate(uint8_t quarantine);
+dam_layer_type_t dam_layer_for_size(size_t size);
 
 #ifdef __cplusplus
 }

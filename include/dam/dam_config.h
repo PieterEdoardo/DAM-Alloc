@@ -1,11 +1,6 @@
 #ifndef DAM_CONFIG_H
 #define DAM_CONFIG_H
 
-#include <stddef.h>
-#include <stdint.h>
-
-#include "internal/dam_internal.h"
-
 /* ================================ *
  * Build configuration              *
  * ================================ */
@@ -31,7 +26,8 @@
 #define DAM_SMALL_MIN 32
 #define DAM_SMALL_MAX 256
 #define DAM_GENERAL_MAX KiB(64)
-#define MAX_POOLS 10
+#define MAX_POOLS 20
+#define MAX_POOL_OVERFLOW_TO_DIRECT_ALLOWED 0
 #define INITIAL_POOL_SIZE MiB(1)
 #define DAM_DIRECT_SHRINK_PERCENTAGE 80
 
@@ -40,7 +36,8 @@
  ********************/
 #define ALIGN_UP_CONST(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
 #define ALIGNMENT (_Alignof(max_align_t))
-#define PAGE_SIZE 4096 // Assumed number
+#define PAGE_SIZE KiB(4) // Assumed number
+#define TRACE_SIZE 16 // Can be dangerous to change
 
 // Headers
 #define BLOCK_HEADER_SIZE ALIGN_UP_CONST(sizeof(block_header_t), ALIGNMENT)
@@ -54,6 +51,11 @@
 // Pools & blocks
 #define MIN_BLOCK_SIZE ALIGN_UP_CONST(BLOCK_HEADER_SIZE + DAM_SMALL_MAX, ALIGNMENT)
 #define POOL_GENERAL_SIZE ALIGN_UP_CONST(sizeof(pool_header_t), PAGE_SIZE)
+
+// Multi threading & thread local caches
+#define THREAD_CACHE_MAX_BLOCKS_PER_CLASS 64
+#define THREAD_CACHE_REFILL_BATCH_SIZE 8
+
 /******************
  * resources      *
  ******************/
@@ -63,19 +65,7 @@
 #define BLOCK_MAGIC 0xDEADBEEF
 #define FREED_MAGIC 0xFEEDFACE
 #define SMALL_MAGIC 0xD34D
+#define SMALL_FREED_MAGIC 0xF33D
 #define CANARY_VALUE 0xDEADC0DE
-
-/* ================================ *
- * Platform invariants              *
- * ================================ */
-_Static_assert(ALIGNMENT >= _Alignof(max_align_t), "ALIGNMENT must match platform max alignment");
-_Static_assert(BLOCK_HEADER_SIZE % ALIGNMENT == 0, "HEAD_SIZE must preserve payload alignment");
-_Static_assert(POOL_GENERAL_SIZE % ALIGNMENT == 0, "Pool header must preserve block alignment");
-_Static_assert(INITIAL_POOL_SIZE >= POOL_GENERAL_SIZE + MIN_BLOCK_SIZE, "Initial pool size is too small");
-_Static_assert(INITIAL_POOL_SIZE % PAGE_SIZE == 0, "Pool size must be a multiple of PAGE_SIZE");
-_Static_assert((DAM_SMALL_MIN & DAM_SMALL_MIN - 1) == 0, "DAM_SMALL_MIN must be power of two");
-_Static_assert((DAM_SMALL_MAX & DAM_SMALL_MAX - 1) == 0, "DAM_SMALL_MAX must be power of two");
-_Static_assert(DAM_SMALL_MIN <= DAM_SMALL_MAX, "Invalid size class range");
-_Static_assert(DAM_SMALL_MAX <= DAM_GENERAL_MAX, "Invalid allocator boundaries");
 
 #endif

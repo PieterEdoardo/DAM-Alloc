@@ -1,9 +1,9 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "dam/dam.h"
 #include "dam/dam_config.h"
 #include "dam/internal/dam_internal.h"
-#include "dam/internal/thread.h"
 #include "dam/dam_log.h"
 
 /**********************************************************
@@ -23,14 +23,12 @@ pool_header_t* dam_pool_list = NULL;
 int initialized = 0;
 
 // Returns 0 on success, 1 on failure.
-int dam_init(void) {
+int dam_init() {
     if (initialized) return 0;
 
-    if (!verify_page_size()) {
-        return 1;
-    }
+    if (!verify_page_size()) return 1;
 
-    DAM_LOG("[INIT] Initializing multi-threading...");
+    DAM_LOG("[INIT] Initializing multi-threading and thread local cache...");
     dam_thread_init();
 
     DAM_LOG("[INIT] Initializing size class allocator...");
@@ -46,17 +44,20 @@ int dam_init(void) {
     return 0;
 }
 
+
+/**********************************************************
+* DAM allocator (core)
+*
+* Memory Allocation suite
+***********************************************************/
 void* dam_malloc(size_t size) {
 
     if (!initialized) dam_init();
 
     if (size == 0) return NULL;
-
-    if (size <= DAM_SMALL_MAX) return dam_small_malloc(size);
-
-    if (size <= DAM_GENERAL_MAX) return dam_general_malloc(size);
-
-    return dam_direct_malloc(size);
+    if (size <= DAM_SMALL_MAX) return dam_small_malloc(size, NULL);
+    if (size <= DAM_GENERAL_MAX) return dam_general_malloc(size, NULL);
+    return dam_direct_malloc(size, NULL);
 }
 
 void* dam_realloc(void* ptr, size_t size) {
@@ -75,15 +76,18 @@ void* dam_realloc(void* ptr, size_t size) {
     }
 
     switch (pool->type) {
-        case DAM_POOL_SMALL:
-            return dam_small_realloc(ptr, size);
-
-        case DAM_POOL_GENERAL:
-            return dam_general_realloc(ptr, size);
-
-        case DAM_POOL_DIRECT:
-            return dam_direct_realloc(ptr, size);
-
+        case DAM_LAYER_SMALL: {
+            size_class_header_t* size_class_header = get_size_class_header(ptr);
+            return dam_small_realloc(ptr, size, size_class_header, NULL);
+        }
+        case DAM_LAYER_GENERAL: {
+            block_header_t* block_header = get_block_header(ptr);
+            return dam_general_realloc(ptr, size, block_header, NULL);
+        }
+        case DAM_LAYER_DIRECT: {
+            block_header_t* direct_header = get_direct_header(ptr);
+            return dam_direct_realloc(ptr, size, direct_header, NULL);
+        }
         default:
             DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
             return NULL;
@@ -103,19 +107,309 @@ void dam_free(void* ptr) {
 
     DAM_LOG("[FREE] Pool type to be freed: %d", pool->type);
     switch (pool->type) {
-        case DAM_POOL_SMALL:
-            dam_small_free(ptr);
+        case DAM_LAYER_SMALL: {
+            size_class_header_t* size_class_header = get_size_class_header(ptr);
+            dam_small_free(ptr, size_class_header);
             break;
-        case DAM_POOL_GENERAL:
-            dam_general_free(ptr, pool);
+        }
+        case DAM_LAYER_GENERAL: {
+            block_header_t* block_header = get_block_header(ptr);
+            dam_general_free(ptr, pool, block_header);
             break;
-        case DAM_POOL_DIRECT:
+        }
+        case DAM_LAYER_DIRECT: {
             dam_direct_free(ptr);
             break;
+        }
         default:
             DAM_LOG_ERROR("Unknown pool type for ptr %p", ptr);
             break;
     }
 }
 
+/**********************************************************
+* DAM allocator (core)
+*
+* Memory diagnostics and security suite
+***********************************************************/
 
+void* dam_trace_malloc(size_t size, const char* trace) {
+
+    if (!initialized) dam_init();
+
+    if (size == 0) return NULL;
+    if (size <= DAM_SMALL_MAX) return dam_small_malloc(size, trace);
+    if (size <= DAM_GENERAL_MAX) return dam_general_malloc(size, trace);
+    return dam_direct_malloc(size, trace);
+}
+
+void* dam_trace_realloc(void* ptr, size_t size) {
+    if (!ptr) return dam_malloc(size);
+
+    if (size == 0) {
+        dam_free(ptr);
+        return NULL;
+    }
+
+    pool_header_t* pool = dam_pool_from_ptr(ptr);
+
+    if (!pool) {
+        DAM_LOG_ERROR("[REALLOC] Pointer does not belong to DAM: %p", ptr);
+        return NULL;
+    }
+
+    char* trace = dam_get_trace(ptr);
+    switch (pool->type) {
+        case DAM_LAYER_SMALL: {
+            size_class_header_t* size_class_header = get_size_class_header(ptr);
+            return dam_small_realloc(ptr, size, size_class_header, trace);
+        }
+        case DAM_LAYER_GENERAL: {
+            block_header_t* block_header = get_block_trace_header(ptr);
+            return dam_general_realloc(ptr, size, block_header, trace);
+        }
+        case DAM_LAYER_DIRECT: {
+            block_header_t* direct_header = get_direct_trace_header(ptr);
+            return dam_direct_realloc(ptr, size, direct_header, trace);
+        }
+        default:
+            DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
+            return NULL;
+    }
+}
+
+/*
+ * Dangerous function, if passed pointer is not traced, it will corrupt the entire memory block and make in unusable
+ * This function is only intended as a thin, useful wrapper, you don't need this function to set the trace.
+ */
+inline void dam_set_trace(void* ptr, const char* trace) {
+    strncpy((char*)ptr - TRACE_SIZE, trace, TRACE_SIZE - 1);
+    ((char*)ptr - 1)[0] = '\0';
+}
+
+/*
+ * If ptr is invalid, it will just return 16 bytes bages of whatever was there.
+ */
+inline char* dam_get_trace(void* ptr) {
+    return (char*)(ptr - TRACE_SIZE);
+}
+void dam_uaf_free(void* ptr) {
+    pool_header_t* pool_header = dam_pool_from_ptr(ptr);
+
+    if (!pool_header) {
+        DAM_LOG_ERROR("[REALLOC] Pointer does not belong to DAM: %p", ptr);
+    } else {
+        switch (pool_header->type) {
+            case DAM_LAYER_SMALL: {
+                size_class_header_t* size_class_header = get_size_class_header(ptr);
+                memset(ptr, 0, class_to_size(get_size_class_header(ptr)->size_class_index));
+                dam_small_free(ptr, size_class_header);
+                break;
+            }
+            case DAM_LAYER_GENERAL: {
+                block_header_t* block_header = get_block_trace_header(ptr);
+                memset(ptr, 0, get_block_header(ptr)->size);
+                dam_general_free(ptr, pool_header, block_header);
+                break;
+            }
+            case DAM_LAYER_DIRECT: {
+                memset(ptr, 0, get_block_header(ptr)->size);
+                dam_direct_free(ptr);
+                break;
+            }
+            default:
+                DAM_LOG_ERROR("[UAF][FREE] Unknown layer type for ptr %p", ptr);
+                break;
+        }
+    }
+}
+
+/*
+ * Creates systemwide snapshot of each layer and their usage statistics. Expensive, and slow.
+ */
+void dam_snapshot(dam_snapshot_t* snapshot) {
+    dam_snapshot_small(snapshot);
+    dam_snapshot_general(snapshot);
+    dam_snapshot_direct(snapshot);
+}
+
+dam_layer_type_t dam_layer_for_size(size_t size) {
+    if (size == 0) return DAM_LAYER_ERROR;
+    if (size <= DAM_SMALL_MAX) return DAM_LAYER_SMALL;
+    if (size <= DAM_GENERAL_MAX) return DAM_LAYER_GENERAL;
+    return DAM_LAYER_DIRECT;
+}
+
+/*
+ * 1.0 is no fragmentation and 0.0 is maximum.
+ * 0.0 would also happen if all pools are perfectly filled up.
+ * Fragmentation only pertains to general pools.
+ * n > DAM_SMALL_MAX && n <= DAM_GENERAL_MAX
+ * Other layers don't experience fragmentation in the traditional sense.
+ * Usage example:
+ * size_t pool_count = dam_pool_count();
+ * dam_pool_snapshot_t buffer[pool_count];
+ * size_t count = dam_general_pool_snapshots(buffer, pool_count);
+ */
+size_t dam_fragmentation(dam_pool_fragmentation_t* snapshot_buffer, size_t capacity) {
+    pool_header_t* current = dam_pool_list;
+    size_t count = 0;
+    while (current) {
+        if (current->type == DAM_LAYER_GENERAL && count < capacity) {
+            dam_general_fragmentation(current, &snapshot_buffer[count]);
+            count++;
+        }
+        current = current->next;
+    }
+
+    return count;
+}
+
+// This function is kinda useless for the public API as it only counts general pools.
+size_t dam_pool_count() {
+    pool_header_t* current = dam_pool_list;
+    size_t count = 0;
+    while (current) {
+        if (current->type == DAM_LAYER_GENERAL) count++;
+        current = current->next;
+    }
+
+    return count;
+}
+/*
+ * Expensive function that checks metadata integrity of pointer. Does some required pool metadata testing as well.
+ * If second argument is set to a non 0 number it will place the associated pool in quarantine in case of event.
+ */
+uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine, uint8_t is_traced) {
+    if (!ptr) {
+        DAM_LOG_VALID_ERROR("Pointer invalid: %p", ptr);
+        return 0;
+    }
+    pool_header_t* pool_header = dam_pool_from_ptr(ptr);
+
+    if (!pool_header) {
+        DAM_LOG_VALID_ERROR("Pointer does not belong to DAM pool: %p", ptr);
+        return 0;
+    }
+
+    if (pool_header->read_only) DAM_LOG_VALID("Pointer belongs to quarantined pool: %p", ptr);
+    if (!pool_header->size) DAM_LOG_VALID("Pointer pool has no size: %p", ptr);
+
+    uint8_t result = 0;
+    if (!is_traced) {
+        switch (pool_header->type) {
+            case DAM_LAYER_ERROR:
+                DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
+                break;
+
+            case DAM_LAYER_SMALL:
+                dam_small_lock();
+                size_class_header_t* size_class_header = get_size_class_header(ptr);
+                result = dam_validate_small_ptr(ptr, size_class_header);
+                dam_small_unlock();
+                break;
+
+            case DAM_LAYER_GENERAL:
+                dam_general_lock();
+                block_header_t* block_header = get_block_header(ptr);
+                result = dam_validate_general_ptr(ptr, pool_header, quarantine, block_header);
+                dam_general_unlock();
+                break;
+
+            case DAM_LAYER_DIRECT:
+                dam_direct_lock();
+                block_header_t* direct_header = get_direct_header(ptr);
+                result = dam_validate_direct_ptr(ptr, direct_header);
+                dam_direct_unlock();
+                break;
+
+            default:
+                DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
+                break;
+        }
+    } else {
+        switch (pool_header->type) {
+            case DAM_LAYER_ERROR:
+                DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
+                break;
+
+            case DAM_LAYER_SMALL:
+                dam_small_lock();
+                size_class_header_t* size_class_header = get_size_class_trace_header(ptr);
+                result = dam_validate_small_ptr(ptr, size_class_header);
+                dam_small_unlock();
+                break;
+
+            case DAM_LAYER_GENERAL:
+                dam_general_lock();
+                block_header_t* block_header = get_block_trace_header(ptr);
+                result = dam_validate_general_ptr(ptr, pool_header, quarantine, block_header);
+                dam_general_unlock();
+                break;
+
+            case DAM_LAYER_DIRECT:
+                dam_direct_lock();
+                block_header_t* direct_header = get_direct_trace_header(ptr);
+                result = dam_validate_direct_ptr(ptr, direct_header);
+                dam_direct_unlock();
+                break;
+
+            default:
+                DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
+                break;
+        }
+    }
+    if (result) DAM_LOG_VALID("Pointer: %p is validated to be in a safe state", ptr);
+    return result;
+}
+
+
+
+/*
+ * Very expensive sequence that loops through all pools of all layers and memory segments to validate metadata.
+ * expected complexity for this function is O(n * x) where n is amount of pools and x is the complexity of dam_validate_ptr()
+ */
+uint8_t dam_validate(uint8_t quarantine) {
+    // pool_header_t* pool_header = dam_pool_list;
+    //
+    // while (pool_header) {
+    //
+    //     uint8_t result;
+    //
+    //     switch (pool_header->type) {
+    //         case DAM_LAYER_ERROR:
+    //             DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", pool_header, pool_header->type);
+    //             break;
+    //
+    //         case DAM_LAYER_SMALL:
+    //             dam_small_lock();
+    //
+    //             size_class_header_t* size_class_header = dam_size_class_header_from_ptr(pool_header->block_list, quarantine);
+    //
+    //             result = dam_validate_small_ptr(ptr, is_traced);
+    //             dam_small_unlock();
+    //             break;
+    //
+    //         case DAM_LAYER_GENERAL:
+    //             dam_general_lock();
+    //             result = dam_validate_general_ptr(ptr, pool_header, quarantine, is_traced);
+    //             dam_general_unlock();
+    //             break;
+    //
+    //         case DAM_LAYER_DIRECT:
+    //             dam_direct_lock();
+    //             result = dam_validate_direct_ptr(ptr, is_traced);
+    //             dam_direct_unlock();
+    //             break;
+    //
+    //         default:
+    //             DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", pool_header, pool_header->type);
+    //             break;
+    //     }
+    //
+    //     dam_validate_ptr(pool_header, quarantine, pool_header->is_traced);
+    //
+    //     pool_header = pool_header->next;
+    // }
+    return 1;
+}

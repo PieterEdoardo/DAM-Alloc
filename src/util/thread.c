@@ -1,5 +1,3 @@
-#include "dam/internal/thread.h"
-
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,7 +47,7 @@ static void thread_cache_destructor(void* cache_ptr) {
         pthread_self(), tc->allocations);
 
     for (size_t class_idx = 0; class_idx < DAM_SIZE_CLASS_COUNT; class_idx++) {
-        size_class_header_t* block = tc->bins[class_idx].free_list;
+        size_class_header_t* block = tc->tc_bins[class_idx].free_list;
 
         while (block) {
             size_class_header_t* next = block->next;
@@ -98,7 +96,11 @@ thread_cache_t* dam_get_thread_cache(void) {
     return thread_cache;
 }
 
-void dam_thread_cache_destroy(void ) {
+inline thread_cache_t* dam_get_current_thread_cache(void) {
+    return thread_cache;
+}
+
+void dam_thread_cache_destroy(void) {
     if (thread_cache) {
         thread_cache_destructor(thread_cache);
         thread_cache = NULL;
