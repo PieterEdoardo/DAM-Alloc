@@ -5,13 +5,6 @@
 #include "dam/internal/dam_internal.h"
 #include "dam/internal/dam_types.h"
 
-// Core internals
-void dam_init_allocator(void);
-void init_allocator_unlocked(void);
-void* dam_malloc_internal(size_t size);
-void dam_free_internal(void* ptr);
-void* dam_realloc_internal(void* ptr, size_t size);
-
 // Multi threading & thread local caches
 void dam_thread_init(void);
 thread_cache_t* dam_get_thread_cache(void);
@@ -24,9 +17,9 @@ void dam_snapshot_general(dam_snapshot_t* snapshot);
 void dam_snapshot_direct(dam_snapshot_t* snapshot);
 void dam_general_fragmentation(pool_header_t* pool, dam_pool_fragmentation_t* snapshot);
 void dam_general_pressure(pool_header_t* pool, dam_pool_pressure_t* snapshot);
-uint8_t dam_validate_small_ptr(void* ptr, uint8_t is_traced);
-uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t quarantine, uint8_t is_traced);
-uint8_t dam_validate_direct_ptr(void* ptr, uint8_t is_traced);
+uint8_t dam_validate_small_ptr(void* ptr, size_class_header_t* size_class_header);
+uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t quarantine, block_header_t* block_header);
+uint8_t dam_validate_direct_ptr(void* ptr, const block_header_t* direct_header);
 
 /* Helpers */
 void dam_register_pool(pool_header_t* new_pool_header);
@@ -35,7 +28,7 @@ pool_header_t* create_general_pool(size_t min_size);
 block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_pool);
 void split_block_if_possible(block_header_t* block_header, size_t actual_size);
 void coalesce_if_possible(block_header_t* block_header, const pool_header_t* pool_header_t);
-uint32_t* dam_get_canary(block_header_t* block_header);
+uint32_t* dam_get_general_canary(void* ptr, block_header_t* block_header);
 void general_pool_quarantine(pool_header_t* pool_header);
 size_t align_up(size_t size, size_t alignment);
 int verify_page_size(void);
@@ -47,8 +40,6 @@ block_header_t* get_block_trace_header(void* ptr);
 pool_header_t* direct_pool_from_ptr(void* ptr);
 block_header_t* get_direct_header(void* ptr);
 block_header_t* get_direct_trace_header(void* ptr);
-char* get_small_trace(void* ptr);
-char* get_general_trace(void* ptr);
 size_t class_to_size(uint8_t class_index);
 uint8_t size_to_class(size_t size, uint8_t traced);
 
@@ -62,11 +53,11 @@ void* dam_small_malloc(size_t size, const char* trace);
 void* dam_general_malloc(size_t size, const char* trace);
 void* dam_direct_malloc(size_t size, const char* trace);
 
-void dam_small_free(void* ptr);
-void dam_general_free(void* ptr, pool_header_t* pool_header);
+void dam_small_free(void* ptr, size_class_header_t* size_class_header);
+void dam_general_free(void* ptr, const pool_header_t* pool_header, block_header_t* block_header);
 void dam_direct_free(void* ptr);
 
-void* dam_small_realloc(void* ptr, size_t size, const size_class_header_t* size_class_header, const char* trace);
+void* dam_small_realloc(void* ptr, size_t size, size_class_header_t* size_class_header, const char* trace);
 void* dam_general_realloc(void* ptr, size_t size, block_header_t* block_header, const char* trace);
 void* dam_direct_realloc(void* ptr, size_t size, const block_header_t* direct_header, const char* trace);
 
@@ -84,8 +75,8 @@ void* dam_small_malloc_internal(size_t size, const char* trace);
 void* dam_general_malloc_internal(size_t size, const char* trace);
 void* dam_direct_malloc_internal(size_t size, const char* trace);
 
-void dam_small_free_internal(void* ptr);
-void dam_general_free_internal(void* ptr, const pool_header_t* pool_header);
+void dam_small_free_internal(void* ptr, size_class_header_t* size_class_header);
+void dam_general_free_internal(void* ptr, const pool_header_t* pool_header, block_header_t* block_header);
 void dam_direct_free_internal(void* ptr);
 
 #include "dam/internal/dam_invariants.h"

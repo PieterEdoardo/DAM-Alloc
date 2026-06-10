@@ -115,13 +115,7 @@ void dam_snapshot_direct(dam_snapshot_t* snapshot) {
     dam_direct_unlock();
 }
 
-uint8_t dam_validate_direct_ptr(void* ptr, uint8_t is_traced) {
-    block_header_t* direct_header;
-    if (is_traced) {
-        direct_header = get_direct_trace_header(ptr);
-    } else {
-        direct_header = get_block_header(ptr);
-    }
+uint8_t dam_validate_direct_ptr(void* ptr, const block_header_t* direct_header) {
 
     if (!direct_header->is_free) {
         if (direct_header->magic != BLOCK_MAGIC) {

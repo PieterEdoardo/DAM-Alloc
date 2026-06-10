@@ -18,20 +18,20 @@ int verify_page_size(void) {
     long actual = sysconf(_SC_PAGESIZE);
     assert(actual > 0);
 
-    if ((size_t)actual != PAGE_SIZE) {
+    if ((size_t) actual != PAGE_SIZE) {
         DAM_LOG_ERROR("System page size (%ld) differs from assumed (%d)", actual, PAGE_SIZE);
         return 0;
     }
     return 1;
 }
 
-void dam_register_pool(pool_header_t* new_pool_header) {
+void dam_register_pool(pool_header_t *new_pool_header) {
     new_pool_header->next = dam_pool_list;
     dam_pool_list = new_pool_header;
 }
 
-void dam_unregister_pool(pool_header_t* pool_header) {
-    pool_header_t** current = &dam_pool_list;
+void dam_unregister_pool(pool_header_t *pool_header) {
+    pool_header_t **current = &dam_pool_list;
 
     while (*current) {
         if (*current == pool_header) {
@@ -42,18 +42,14 @@ void dam_unregister_pool(pool_header_t* pool_header) {
     }
 }
 
-pool_header_t* dam_pool_from_ptr(void* ptr) {
-    pool_header_t* pool_header = dam_pool_list;
+pool_header_t *dam_pool_from_ptr(void *ptr) {
+    pool_header_t *pool_header = dam_pool_list;
 
     while (pool_header) {
-        if (ptr >= pool_header->memory && (char*)ptr < (char*)pool_header->memory + pool_header->size) {
+        if (ptr >= pool_header->memory && (char *) ptr < (char *) pool_header->memory + pool_header->size) {
             return pool_header;
         }
         pool_header = pool_header->next;
     }
     return NULL;
-}
-
-char* dam_get_trace(void* ptr) {
-    return (char*)(ptr - TRACE_SIZE);
 }

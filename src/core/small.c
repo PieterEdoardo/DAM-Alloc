@@ -190,7 +190,7 @@ void* dam_small_malloc(size_t size, const char* trace) {
     return ptr;
 }
 
-void* dam_small_realloc(void* ptr, size_t size, const size_class_header_t* size_class_header, const char* trace) {
+void* dam_small_realloc(void* ptr, size_t size, size_class_header_t* size_class_header, const char* trace) {
     uint8_t current_index = size_class_header->size_class_index;
 
     // Check if cross layer before locking
@@ -219,39 +219,37 @@ void* dam_small_realloc(void* ptr, size_t size, const size_class_header_t* size_
     if (new_ptr) {
         size_t copy_size = size_classes[current_index].block_size;
         memcpy(new_ptr, ptr, copy_size);
-        dam_small_free_internal(ptr);
+        dam_small_free_internal(ptr, size_class_header);
     }
 
     dam_small_unlock();
     return new_ptr;
 }
 
-void dam_small_free_internal(void* ptr) {
-    size_class_header_t* header = get_size_class_header(ptr);
-
+void dam_small_free_internal(void* ptr, size_class_header_t* size_class_header) {
     // Double free checks
-    if (header->magic == SMALL_FREED_MAGIC) {
+    if (size_class_header->magic == SMALL_FREED_MAGIC) {
         DAM_LOG_ERROR("[FREE] Double free detected at %p!", ptr);
         return;
     }
 
     // Invalid pointer checks
-    if (header->magic != SMALL_MAGIC) {
+    if (size_class_header->magic != SMALL_MAGIC) {
         DAM_LOG_ERROR("[FREE] Invalid pointer passed to dam_free: %p", ptr);
         return;
     }
 
-    uint8_t class = header->size_class_index;
-    header->is_free = 1;
-    header->magic = SMALL_FREED_MAGIC;
+    uint8_t class = size_class_header->size_class_index;
+    size_class_header->is_free = 1;
+    size_class_header->magic = SMALL_FREED_MAGIC;
 
-    header->next = size_classes[class].free_class_list;
-    size_classes[class].free_class_list = header;
+    size_class_header->next = size_classes[class].free_class_list;
+    size_classes[class].free_class_list = size_class_header;
 
     DAM_LOG("[FREE] Pointer %p freed", ptr);
 }
 
-void dam_small_free(void* ptr) {
+void dam_small_free(void* ptr, size_class_header_t* size_class_header) {
     size_class_header_t* header = get_size_class_header(ptr);
     uint8_t class = header->size_class_index;
 
@@ -274,7 +272,7 @@ void dam_small_free(void* ptr) {
     DAM_LOG("[TCACHE FULL] class=%u, returning %p to central", class, ptr);
 
     dam_small_lock();
-    dam_small_free_internal(ptr);
+    dam_small_free_internal(ptr, size_class_header);
     dam_small_unlock();
 }
 inline size_class_header_t* get_size_class_trace_header(void* ptr) {
@@ -285,9 +283,9 @@ inline size_class_header_t* get_size_class_header(void* ptr) {
     return (size_class_header_t*)((char*)ptr - SIZE_CLASS_HEADER_SIZE);
 }
 
-void dam_small_free_to_central(void* ptr) {
+void dam_small_free_to_central(void* ptr, size_class_header_t* size_class_header) {
     dam_small_lock();
-    dam_small_free_internal(ptr);
+    dam_small_free_internal(ptr, size_class_header);
     dam_small_unlock();
 }
 
@@ -310,38 +308,28 @@ void dam_snapshot_small(dam_snapshot_t* snapshot) {
     dam_small_unlock();
 }
 
-uint8_t dam_validate_small_ptr(void* ptr, uint8_t is_traced) {
-    size_class_header_t* size_class;
-    if (is_traced) {
-        size_class = get_size_class_trace_header(ptr);
-    } else {
-        size_class = get_size_class_header(ptr);
-    }
-
-    if (!size_class) {
+uint8_t dam_validate_small_ptr(void* ptr, size_class_header_t* size_class_header) {
+    if (!size_class_header) {
         DAM_LOG_VALID_ERROR("Pointer size class metadata is so damaged, header data could not be retrieved: %p", ptr);
         return 0;
     }
-    if (size_class->size_class_index < DAM_SIZE_CLASS_COUNT - DAM_SIZE_CLASS_COUNT || size_class->size_class_index > DAM_SIZE_CLASS_COUNT - 1) {
-        DAM_LOG_VALID_ERROR("Pointer size class index is out of bounds: %p, index %hhu", ptr, size_class->size_class_index);
+
+    if (size_class_header->size_class_index < DAM_SIZE_CLASS_COUNT - DAM_SIZE_CLASS_COUNT || size_class_header->size_class_index > DAM_SIZE_CLASS_COUNT - 1) {
+        DAM_LOG_VALID_ERROR("Pointer size class index is out of bounds: %p, index %hhu", ptr, size_class_header->size_class_index);
         return 0;
     }
 
-    if (!size_class->is_free) {
-        if (size_class->magic != SMALL_MAGIC) {
-            DAM_LOG_VALID_ERROR("Pointer size class magic does not match: %p, magic %d", ptr, size_class->magic);
+    if (!size_class_header->is_free) {
+        if (size_class_header->magic != SMALL_MAGIC) {
+            DAM_LOG_VALID_ERROR("Pointer size class magic does not match: %p, magic %d", ptr, size_class_header->magic);
             return 0;
         }
     } else {
         DAM_LOG("Pointer size class is free: %p", ptr);
-        if (size_class->magic != SMALL_FREED_MAGIC) {
-            DAM_LOG_VALID_ERROR("Pointer size class free magic does not match: %p, magic %d", ptr, size_class->magic);
+        if (size_class_header->magic != SMALL_FREED_MAGIC) {
+            DAM_LOG_VALID_ERROR("Pointer size class free magic does not match: %p, magic %d", ptr, size_class_header->magic);
             return 0;
         }
     }
     return 1;
-}
-
-inline char* get_small_trace(void* ptr) {
-    return (char*)ptr - TRACE_SIZE;
 }

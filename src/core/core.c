@@ -23,7 +23,7 @@ pool_header_t* dam_pool_list = NULL;
 int initialized = 0;
 
 // Returns 0 on success, 1 on failure.
-int dam_init(void) {
+int dam_init() {
     if (initialized) return 0;
 
     if (!verify_page_size()) return 1;
@@ -76,18 +76,18 @@ void* dam_realloc(void* ptr, size_t size) {
     }
 
     switch (pool->type) {
-        case DAM_LAYER_SMALL:
+        case DAM_LAYER_SMALL: {
             size_class_header_t* size_class_header = get_size_class_header(ptr);
             return dam_small_realloc(ptr, size, size_class_header, NULL);
-
+        }
         case DAM_LAYER_GENERAL: {
             block_header_t* block_header = get_block_header(ptr);
             return dam_general_realloc(ptr, size, block_header, NULL);
         }
-        case DAM_LAYER_DIRECT:
+        case DAM_LAYER_DIRECT: {
             block_header_t* direct_header = get_direct_header(ptr);
             return dam_direct_realloc(ptr, size, direct_header, NULL);
-
+        }
         default:
             DAM_LOG_ERROR("[REALLOC] Unknown pool type for ptr %p", ptr);
             return NULL;
@@ -107,18 +107,20 @@ void dam_free(void* ptr) {
 
     DAM_LOG("[FREE] Pool type to be freed: %d", pool->type);
     switch (pool->type) {
-        case DAM_LAYER_SMALL:
-            dam_small_free(ptr);
+        case DAM_LAYER_SMALL: {
+            size_class_header_t* size_class_header = get_size_class_header(ptr);
+            dam_small_free(ptr, size_class_header);
             break;
-
-        case DAM_LAYER_GENERAL:
-            dam_general_free(ptr, pool);
+        }
+        case DAM_LAYER_GENERAL: {
+            block_header_t* block_header = get_block_header(ptr);
+            dam_general_free(ptr, pool, block_header);
             break;
-
-        case DAM_LAYER_DIRECT:
+        }
+        case DAM_LAYER_DIRECT: {
             dam_direct_free(ptr);
             break;
-
+        }
         default:
             DAM_LOG_ERROR("Unknown pool type for ptr %p", ptr);
             break;
@@ -178,13 +180,19 @@ void* dam_trace_realloc(void* ptr, size_t size) {
 
 /*
  * Dangerous function, if passed pointer is not traced, it will corrupt the entire memory block and make in unusable
- * This function is only intended as a useful wrapper, it's recommended to do this manually to prevent corruption.
+ * This function is only intended as a thin, useful wrapper, you don't need this function to set the trace.
  */
 inline void dam_set_trace(void* ptr, const char* trace) {
     strncpy((char*)ptr - TRACE_SIZE, trace, TRACE_SIZE - 1);
     ((char*)ptr - 1)[0] = '\0';
 }
 
+/*
+ * If ptr is invalid, it will just return 16 bytes bages of whatever was there.
+ */
+inline char* dam_get_trace(void* ptr) {
+    return (char*)(ptr - TRACE_SIZE);
+}
 void dam_uaf_free(void* ptr) {
     pool_header_t* pool_header = dam_pool_from_ptr(ptr);
 
@@ -192,21 +200,23 @@ void dam_uaf_free(void* ptr) {
         DAM_LOG_ERROR("[REALLOC] Pointer does not belong to DAM: %p", ptr);
     } else {
         switch (pool_header->type) {
-            case DAM_LAYER_SMALL:
+            case DAM_LAYER_SMALL: {
+                size_class_header_t* size_class_header = get_size_class_header(ptr);
                 memset(ptr, 0, class_to_size(get_size_class_header(ptr)->size_class_index));
-                dam_small_free(ptr);
+                dam_small_free(ptr, size_class_header);
                 break;
-
-            case DAM_LAYER_GENERAL:
+            }
+            case DAM_LAYER_GENERAL: {
+                block_header_t* block_header = get_block_trace_header(ptr);
                 memset(ptr, 0, get_block_header(ptr)->size);
-                dam_general_free(ptr, pool_header);
+                dam_general_free(ptr, pool_header, block_header);
                 break;
-
-            case DAM_LAYER_DIRECT:
+            }
+            case DAM_LAYER_DIRECT: {
                 memset(ptr, 0, get_block_header(ptr)->size);
                 dam_direct_free(ptr);
                 break;
-
+            }
             default:
                 DAM_LOG_ERROR("[UAF][FREE] Unknown layer type for ptr %p", ptr);
                 break;
@@ -316,6 +326,8 @@ uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine, uint8_t is_traced) {
     if (result) DAM_LOG_VALID("Pointer: %p is validated to be in a safe state", ptr);
     return result;
 }
+
+
 
 /*
  * Very expensive sequence that loops through all pools of all layers and memory segments to validate metadata.

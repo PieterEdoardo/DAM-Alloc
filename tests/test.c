@@ -477,16 +477,13 @@ static void test_tracing(void) {
     printf("Malloc to class: %d\n", size_to_class(size_a, 1));
     size_t* a_blocked = dam_malloc(size_a);
 
-
     *a = 414141414141414141;
 
     char* trace = dam_get_trace(a);
-
-
     printf("Traced value: %s\n", dam_get_trace(a));
     printf("ptr %p\n", a);
-    // strncpy((char*)a - TRACE_SIZE, "tag:changed", TRACE_SIZE - 1);
-    // ((char*)a - 1)[0] = '\0';
+    dam_set_trace(a, "tag:changed_123");
+
     printf("Realloc to layer: %d\n", dam_layer_for_size(size_b));
     printf("Realloc to class: %d\n", size_to_class(size_b, 1));
     size_t* b = dam_trace_realloc(a, size_b);

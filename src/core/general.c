@@ -27,7 +27,7 @@ void  dam_general_init() {
 }
 
 void* dam_general_malloc_internal(size_t size, const char* trace) {
-    size_t aligned_size = align_up(size, ALIGNMENT);
+    const size_t aligned_size = align_up(size, ALIGNMENT);
     size_t actual_size = aligned_size + sizeof(uint32_t);
     actual_size = align_up(actual_size, ALIGNMENT);
 
@@ -37,7 +37,7 @@ void* dam_general_malloc_internal(size_t size, const char* trace) {
     found_block = find_block_in_pools(actual_size, &found_pool);
 
     if (!found_block) {
-        size_t min_pool_size = POOL_GENERAL_SIZE + BLOCK_HEADER_SIZE +  actual_size + MIN_BLOCK_SIZE;
+        const size_t min_pool_size = POOL_GENERAL_SIZE + BLOCK_HEADER_SIZE +  actual_size + MIN_BLOCK_SIZE;
         pool_header_t* new_pool = create_general_pool(min_pool_size);
 
         if (!new_pool) {
@@ -83,13 +83,7 @@ void* dam_general_malloc_internal(size_t size, const char* trace) {
     return ptr;
 }
 
-inline char* get_general_trace(void* ptr) {
-    return (char*)ptr - TRACE_SIZE;
-}
-
-void dam_general_free_internal(void* ptr, const pool_header_t* pool_header) {
-    block_header_t* block_header = get_block_header(ptr);
-
+void dam_general_free_internal(void* ptr, const pool_header_t* pool_header, block_header_t* block_header) {
     // Double free checks
     if (block_header->magic == FREED_MAGIC) {
         DAM_LOG_ERROR("[FREE] Double free detected at %p!", ptr);
@@ -114,7 +108,7 @@ void dam_general_free_internal(void* ptr, const pool_header_t* pool_header) {
         return;
     }
 
-    unsigned int* end_canary = (unsigned int*)((char*)ptr + block_header->user_size);
+    const unsigned int* end_canary = (unsigned int*)((char*)ptr + block_header->user_size);
     if (*end_canary != CANARY_VALUE) {
         DAM_LOG_ERROR("[FREE][CANARY] Buffer overflow detected at %p! Canary was 0x%X, expected 0x%X",ptr, *end_canary, CANARY_VALUE);
         // Continue to free, but user knows there was corruption.
@@ -137,9 +131,9 @@ void* dam_general_malloc(size_t size, const char* trace) {
     return ptr;
 }
 
-void dam_general_free(void* ptr, pool_header_t* pool_header) {
+void dam_general_free(void* ptr, const pool_header_t* pool_header, block_header_t* block_header) {
     dam_general_lock();
-    dam_general_free_internal(ptr, pool_header);
+    dam_general_free_internal(ptr, pool_header, block_header);
     dam_general_unlock();
 }
 
@@ -414,14 +408,7 @@ void dam_general_pressure(pool_header_t* pool, dam_pool_pressure_t* snapshot) {
     dam_general_unlock();
 }
 
-uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t quarantine, uint8_t is_traced) {
-    block_header_t* block_header;
-    if (is_traced) {
-        block_header = get_block_trace_header(ptr);
-    } else {
-        block_header = get_block_header(ptr);
-    }
-
+uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t quarantine, block_header_t* block_header) {
     if (!block_header->is_free) {
         if (block_header->magic != BLOCK_MAGIC) {
             DAM_LOG_VALID_ERROR("Pointer magic does not match: %p, magic %d", ptr, block_header->magic);
@@ -430,7 +417,7 @@ uint8_t dam_validate_general_ptr(void* ptr, pool_header_t* pool_header, uint8_t 
             return 0;
         }
 
-        uint32_t* canary = dam_get_canary(block_header);
+        uint32_t* canary = dam_get_general_canary(ptr, block_header);
 
         if (*canary != CANARY_VALUE) {
             DAM_LOG_VALID("Possible overflow detected at: %p", canary);
@@ -457,6 +444,6 @@ inline void general_pool_quarantine(pool_header_t* pool_header) {
     pool_header->read_only = 1;
 }
 
-inline uint32_t* dam_get_canary(block_header_t* block_header) {
-    return (uint32_t*)((char*)block_header + BLOCK_HEADER_SIZE + block_header->user_size);
+inline uint32_t* dam_get_general_canary(void* ptr, block_header_t* block_header) {
+    return (uint32_t*)((char*)ptr + block_header->user_size);
 }
