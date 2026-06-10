@@ -296,32 +296,68 @@ uint8_t dam_validate_ptr(void* ptr, uint8_t quarantine, uint8_t is_traced) {
     if (!pool_header->size) DAM_LOG_VALID("Pointer pool has no size: %p", ptr);
 
     uint8_t result = 0;
-    switch (pool_header->type) {
-        case DAM_LAYER_ERROR:
-            DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
-            break;
+    if (!is_traced) {
+        switch (pool_header->type) {
+            case DAM_LAYER_ERROR:
+                DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
+                break;
 
-        case DAM_LAYER_SMALL:
-            dam_small_lock();
-            result = dam_validate_small_ptr(ptr, is_traced);
-            dam_small_unlock();
-            break;
+            case DAM_LAYER_SMALL:
+                dam_small_lock();
+                size_class_header_t* size_class_header = get_size_class_header(ptr);
+                result = dam_validate_small_ptr(ptr, size_class_header);
+                dam_small_unlock();
+                break;
 
-        case DAM_LAYER_GENERAL:
-            dam_general_lock();
-            result = dam_validate_general_ptr(ptr, pool_header, quarantine, is_traced);
-            dam_general_unlock();
-            break;
+            case DAM_LAYER_GENERAL:
+                dam_general_lock();
+                block_header_t* block_header = get_block_header(ptr);
+                result = dam_validate_general_ptr(ptr, pool_header, quarantine, block_header);
+                dam_general_unlock();
+                break;
 
-        case DAM_LAYER_DIRECT:
-            dam_direct_lock();
-            result = dam_validate_direct_ptr(ptr, is_traced);
-            dam_direct_unlock();
-            break;
+            case DAM_LAYER_DIRECT:
+                dam_direct_lock();
+                block_header_t* direct_header = get_direct_header(ptr);
+                result = dam_validate_direct_ptr(ptr, direct_header);
+                dam_direct_unlock();
+                break;
 
-        default:
-            DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
-            break;
+            default:
+                DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
+                break;
+        }
+    } else {
+        switch (pool_header->type) {
+            case DAM_LAYER_ERROR:
+                DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
+                break;
+
+            case DAM_LAYER_SMALL:
+                dam_small_lock();
+                size_class_header_t* size_class_header = get_size_class_trace_header(ptr);
+                result = dam_validate_small_ptr(ptr, size_class_header);
+                dam_small_unlock();
+                break;
+
+            case DAM_LAYER_GENERAL:
+                dam_general_lock();
+                block_header_t* block_header = get_block_trace_header(ptr);
+                result = dam_validate_general_ptr(ptr, pool_header, quarantine, block_header);
+                dam_general_unlock();
+                break;
+
+            case DAM_LAYER_DIRECT:
+                dam_direct_lock();
+                block_header_t* direct_header = get_direct_trace_header(ptr);
+                result = dam_validate_direct_ptr(ptr, direct_header);
+                dam_direct_unlock();
+                break;
+
+            default:
+                DAM_LOG_VALID_ERROR("Header layer type invalid: %p, given type: %d", ptr, pool_header->type);
+                break;
+        }
     }
     if (result) DAM_LOG_VALID("Pointer: %p is validated to be in a safe state", ptr);
     return result;
