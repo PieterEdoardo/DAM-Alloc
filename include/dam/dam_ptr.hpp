@@ -1,5 +1,7 @@
 #pragma once
 #include "dam.h"
+#include <utility>
+#include <new>
 
 namespace dam {
     template <typename T>
@@ -32,6 +34,17 @@ namespace dam {
             return *this;
         }
 
+        T* release() noexcept {
+            T* temp = ptr;
+            ptr = nullptr;
+            return temp;
+        }
+
+        void reset(T* p = nullptr) noexcept {
+            if (ptr) dam_free(ptr);
+            ptr = p;
+        }
+
         T* get() const { return ptr; }
         T& operator*() const { return *ptr; }
         T* operator->() const { return ptr; }
@@ -46,4 +59,8 @@ namespace dam {
         new (ptr) T(std::forward<Args>(args)...);
         return unique_ptr<T>(ptr);
     }
+
+
+
+
 }
