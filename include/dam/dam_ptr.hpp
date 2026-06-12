@@ -9,7 +9,6 @@ namespace dam {
         T* ptr;
 
     public:
-        // malloc
         explicit unique_ptr(T* p = nullptr) noexcept : ptr(p) {}
 
         // free
@@ -60,7 +59,71 @@ namespace dam {
         return unique_ptr<T>(ptr);
     }
 
+    template <typename T>
+    class unique_ptr<T[]> {
+        T* ptr;
+        size_t size;
 
+    public:
+        explicit unique_ptr(T* p = nullptr, const size_t n = 0) noexcept : ptr(p), size(n) {}
 
+        // realloc
+        bool resize(size_t new_count) {
+            void* new_ptr = dam_realloc(ptr, sizeof(T) * new_count);
+            if (!new_ptr) return false;
+            ptr = static_cast<T*>(new_ptr);
+            return true;
+        }
 
+        // free
+        ~unique_ptr() noexcept {
+            if (ptr) dam_free(ptr);
+        }
+
+        // no copy
+        unique_ptr(const unique_ptr&) = delete;
+        unique_ptr& operator=(const unique_ptr&) = delete;
+
+        // move
+        unique_ptr(unique_ptr&& other) noexcept : ptr(other.ptr), size(other.size) {
+            other.ptr = nullptr;
+            other.size = 0;
+        }
+        unique_ptr& operator=(unique_ptr&& other) noexcept {
+            if (this != &other) {
+                if (ptr) dam_free(ptr);
+                ptr = other.ptr;
+                size = other.size;
+                other.ptr = nullptr;
+                other.size = 0;
+            }
+            return *this;
+        }
+
+        T* release() noexcept {
+            T* tmp = ptr;
+            ptr = nullptr;
+            size = 0;
+            return tmp;
+        }
+
+        void reset(T* p = nullptr, const size_t n = 0) noexcept {
+            if (ptr) dam_free(ptr);
+            ptr = p;
+            size = n;
+        }
+
+        T* get() const { return ptr; }
+        T& operator[](size_t i) const { return ptr[i]; }
+
+        explicit operator bool() const { return ptr != nullptr; }
+    };
+
+    template<typename T>
+    unique_ptr<T[]> make_unique(const size_t size) {
+        T* ptr = static_cast<T*>(dam_malloc(sizeof(T) * size));
+        if (!ptr) return unique_ptr<T[]>(nullptr, 0);
+        for (size_t i = 0; i < size; i++) new (ptr + i) T();
+        return unique_ptr<T[]>(ptr, size);
+    }
 }
