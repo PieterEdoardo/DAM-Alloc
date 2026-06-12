@@ -52,7 +52,8 @@ namespace dam {
     };
 
     template<typename T, typename... Args>
-    unique_ptr<T> make_unique(Args&&... args) {
+    typename std::enable_if<!std::is_array<T>::value, unique_ptr<T>>::type
+    make_unique(Args&&... args) {
         T* ptr = static_cast<T*>(dam_malloc(sizeof(T)));
         if (!ptr) return unique_ptr<T>(nullptr);
         new (ptr) T(std::forward<Args>(args)...);
@@ -120,10 +121,12 @@ namespace dam {
     };
 
     template<typename T>
-    unique_ptr<T[]> make_unique(const size_t size) {
-        T* ptr = static_cast<T*>(dam_malloc(sizeof(T) * size));
-        if (!ptr) return unique_ptr<T[]>(nullptr, 0);
-        for (size_t i = 0; i < size; i++) new (ptr + i) T();
-        return unique_ptr<T[]>(ptr, size);
+    typename std::enable_if<std::is_array<T>::value, unique_ptr<T>>::type
+    make_unique(size_t size) {
+        using Elem = typename std::remove_extent<T>::type;
+        Elem* ptr = static_cast<Elem*>(dam_malloc(sizeof(Elem) * size));
+        if (!ptr) return unique_ptr<T>(nullptr, 0);
+        for (size_t i = 0; i < size; i++) new (ptr + i) Elem();
+        return unique_ptr<T>(ptr, size);
     }
 }
