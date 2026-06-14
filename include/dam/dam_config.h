@@ -23,7 +23,7 @@
 /*****************
  * Configuration *
  *****************/
-#define DAM_SMALL_MIN 32
+#define DAM_SMALL_MIN 16
 #define DAM_SMALL_MAX 256
 #define DAM_GENERAL_MAX KiB(64)
 #define MAX_POOLS 20
@@ -41,6 +41,7 @@
 
 // Headers
 #define BLOCK_HEADER_SIZE ALIGN_UP_CONST(sizeof(block_header_t), ALIGNMENT)
+#define FREE_BLOCK_HEADER_SIZE ALIGN_UP_CONST(sizeof(free_block_header_t), ALIGNMENT)
 #define SIZE_CLASS_HEADER_SIZE align_up(sizeof(size_class_header_t), ALIGNMENT)
 
 // Size classes

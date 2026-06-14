@@ -1,6 +1,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 
@@ -83,7 +84,7 @@ void* dam_general_malloc_internal(size_t size, const char* trace) {
     return ptr;
 }
 
-void dam_general_free_internal(void* ptr, const pool_header_t* pool_header, block_header_t* block_header) {
+void dam_general_free_internal(void* ptr, pool_header_t* pool_header, block_header_t* block_header) {
     // Double free checks
     if (block_header->magic == FREED_MAGIC) {
         DAM_LOG_ERROR("[FREE] Double free detected at %p!", ptr);
@@ -120,7 +121,48 @@ void dam_general_free_internal(void* ptr, const pool_header_t* pool_header, bloc
     block_header->is_free = 1;
 
     coalesce_if_possible(block_header, pool_header);
+
+    // general_add_to_free_list(pool_header, block_header);
+
     DAM_LOG("[FREE] Pointer %p freed", ptr);
+}
+
+void add_to_free_list(pool_header_t* pool_header, block_header_t* block_header) {
+    block_header->next_ptr = pool_header->free_list;
+    free_block_header_t* free_block_header = get_free_block_header(block_header);
+
+    free_block_header->next_ptr = pool_header->free_list;
+    free_block_header->prev_ptr = NULL;
+
+    if (pool_header->free_list) {
+        free_block_header_t* old_header = get_free_block_header(pool_header->free_list);
+        old_header->prev_ptr = block_header;
+    }
+
+    pool_header->free_list = block_header;
+}
+
+inline free_block_header_t* get_free_block_header(block_header_t* block_header) {
+    return (free_block_header_t*)((char*)block_header + BLOCK_HEADER_SIZE);
+}
+
+block_header_t* search_free_block_in_free_list(pool_header_t* pool_header, size_t actual_size) {
+    block_header_t* current = pool_header->free_list;
+    block_header_t* previous = NULL;
+
+    while (current) {
+        if (current->size >= actual_size) {
+            if (previous) {
+                previous->next_ptr = current->next_ptr;
+            } else {
+                pool_header->free_list = current->next_ptr;
+            }
+            return current;
+        }
+        previous = current;
+        current = current->next_ptr;
+    }
+    return NULL;
 }
 
 void* dam_general_malloc(size_t size, const char* trace) {
@@ -284,7 +326,6 @@ pool_header_t* create_general_pool(size_t min_size) {
 block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_pool) {
     if (!dam_pool_list) return NULL;
 
-    size_t blocks_checked = 0;
     pool_header_t* current_pool = dam_pool_list;
     while (current_pool) {
         if (current_pool->read_only == 1) {
@@ -294,7 +335,6 @@ block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_po
         }
         block_header_t* current_block = current_pool->block_list;
         while (current_block) {
-            blocks_checked++;
             if (current_block->is_free && current_block->size >= actual_size) {
                 *found_pool = current_pool;
 

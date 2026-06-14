@@ -38,7 +38,10 @@ typedef struct block_header {
     uint8_t is_traced;
 } block_header_t;
 
-
+typedef struct free_block_header {
+    void* prev_ptr;
+    void* next_ptr;
+} free_block_header_t;
 
 typedef struct pool_header {
     void* memory;
@@ -47,6 +50,7 @@ typedef struct pool_header {
     uint8_t read_only;
     struct pool_header* next;
     block_header_t* block_list;
+    block_header_t* free_list;
 } pool_header_t;
 
 typedef struct size_class {

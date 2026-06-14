@@ -42,6 +42,9 @@ block_header_t* get_direct_header(void* ptr);
 block_header_t* get_direct_trace_header(void* ptr);
 size_t class_to_size(uint8_t class_index);
 uint8_t size_to_class(size_t size, uint8_t traced);
+void add_to_free_list(pool_header_t* pool_header, block_header_t* block_header);
+block_header_t* search_free_block_in_free_list(pool_header_t* pool_header, size_t actual_size);
+free_block_header_t* get_free_block_header(block_header_t* block_header);
 
 
 /* allocator entry points */
@@ -76,7 +79,7 @@ void* dam_general_malloc_internal(size_t size, const char* trace);
 void* dam_direct_malloc_internal(size_t size, const char* trace);
 
 void dam_small_free_internal(void* ptr, size_class_header_t* size_class_header);
-void dam_general_free_internal(void* ptr, const pool_header_t* pool_header, block_header_t* block_header);
+void dam_general_free_internal(void* ptr, pool_header_t* pool_header, block_header_t* block_header);
 void dam_direct_free_internal(void* ptr);
 
 #include "dam/internal/dam_invariants.h"
