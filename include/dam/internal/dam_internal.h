@@ -27,7 +27,7 @@ void dam_unregister_pool(pool_header_t* pool_header);
 pool_header_t* create_general_pool(size_t min_size);
 block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_pool);
 void split_block_if_possible(block_header_t* block_header, size_t actual_size);
-void coalesce_if_possible(block_header_t* block_header, pool_header_t* pool_header);
+block_header_t* coalesce_if_possible(block_header_t* block_header, pool_header_t* pool_header);
 uint32_t* dam_get_general_canary(void* ptr, block_header_t* block_header);
 void general_pool_quarantine(pool_header_t* pool_header);
 size_t align_up(size_t size, size_t alignment);
@@ -59,7 +59,7 @@ void* dam_general_malloc(size_t size, const char* trace);
 void* dam_direct_malloc(size_t size, const char* trace);
 
 void dam_small_free(void* ptr, size_class_header_t* size_class_header);
-void dam_general_free(void* ptr, const pool_header_t* pool_header, block_header_t* block_header);
+void dam_general_free(void* ptr, pool_header_t* pool_header, block_header_t* block_header);
 void dam_direct_free(void* ptr);
 
 void* dam_small_realloc(void* ptr, size_t size, size_class_header_t* size_class_header, const char* trace);

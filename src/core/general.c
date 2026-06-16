@@ -47,13 +47,7 @@ void* dam_general_malloc_internal(size_t size, const char* trace) {
         }
 
         found_block = find_free_block_in_pools(&found_pool, actual_size);
-        while (found_pool) {
-            if (!found_pool->read_only && found_pool->type == DAM_LAYER_GENERAL && found_pool->has_free) {
-                found_block = search_in_free_list(found_pool, actual_size);
-                if (found_block) break;
-            }
-            found_pool = found_pool->next;
-        }
+
         if (!found_block) {
             DAM_LOG_ERROR("[ALLOC] FAILED: Still no space after creating pool!");
             return NULL;
@@ -126,7 +120,7 @@ void dam_general_free_internal(void* ptr, pool_header_t* pool_header, block_head
     block_header->magic = FREED_MAGIC;
     block_header->is_free = 1;
 
-    coalesce_if_possible(block_header, pool_header);
+    block_header = coalesce_if_possible(block_header, pool_header);
 
     add_to_free_list(block_header->pool_ptr, block_header);
 
@@ -155,14 +149,15 @@ inline free_block_header_t* get_free_block_header(block_header_t* block_header) 
 block_header_t* find_free_block_in_pools(pool_header_t** found_pool, size_t actual_size) {
     pool_header_t* current_pool = dam_pool_list;
     while (current_pool) {
-        if (!current_pool->read_only && current_pool-> type == DAM_LAYER_GENERAL && current_pool->has_free) {
-            *found_pool = current_pool;
-            return search_in_free_list(current_pool, actual_size);
+        if (!current_pool->read_only && current_pool->type == DAM_LAYER_GENERAL && current_pool->has_free) {
+            block_header_t* block = search_in_free_list(current_pool, actual_size);
+            if (block) {
+                *found_pool = current_pool;
+                return block;
+            }
         }
-
         current_pool = current_pool->next;
     }
-
     return NULL;
 }
 
@@ -205,7 +200,7 @@ void* dam_general_malloc(size_t size, const char* trace) {
     return ptr;
 }
 
-void dam_general_free(void* ptr, const pool_header_t* pool_header, block_header_t* block_header) {
+void dam_general_free(void* ptr, pool_header_t* pool_header, block_header_t* block_header) {
     dam_general_lock();
     dam_general_free_internal(ptr, pool_header, block_header);
     dam_general_unlock();
@@ -247,6 +242,7 @@ void* dam_general_realloc(void* ptr, size_t size, block_header_t* block_header, 
         if (available_space >= new_actual_size) {
 
             block_header_t* old_next = block_header->next_ptr;
+            remove_from_free_list(block_header->pool_ptr, old_next);
             block_header->size = available_space;
             block_header->next_ptr = old_next->next_ptr;
 
@@ -408,7 +404,7 @@ void split_block_if_possible(block_header_t* block_header, size_t actual_size) {
     }
 }
 
-void coalesce_if_possible(block_header_t* block_header, pool_header_t* pool_header) {
+block_header_t* coalesce_if_possible(block_header_t* block_header, pool_header_t* pool_header) {
     // Coalesce with previous block if it's free
     if (block_header->prev.ptr && block_header->prev.ptr->is_free && block_header->prev.ptr->magic == FREED_MAGIC) {
         DAM_LOG("[COALESCE] Merging with previous block: %zu + %zu", block_header->prev->size, block_header->size);
@@ -418,6 +414,7 @@ void coalesce_if_possible(block_header_t* block_header, pool_header_t* pool_head
         if (block_header->next_ptr) block_header->next_ptr->prev.ptr = block_header->prev.ptr;
 
         block_header = block_header->prev.ptr;
+        return block_header;
     }
 
     // Coalesce with next block if it's free
@@ -430,8 +427,11 @@ void coalesce_if_possible(block_header_t* block_header, pool_header_t* pool_head
 
             if (block_header->next_ptr) block_header->next_ptr->prev.ptr = block_header;
 
+            return block_header;
         }
     }
+
+    return block_header;
 }
 
 inline block_header_t* get_block_header(void* ptr) {
