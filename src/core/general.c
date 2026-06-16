@@ -149,7 +149,12 @@ inline free_block_header_t* get_free_block_header(block_header_t* block_header) 
 block_header_t* find_free_block_in_pools(pool_header_t** found_pool, size_t actual_size) {
     pool_header_t* current_pool = dam_pool_list;
     while (current_pool) {
-        if (!current_pool->read_only && current_pool->type == DAM_LAYER_GENERAL && current_pool->has_free) {
+        if (current_pool->read_only ) {
+            DAM_LOG_VALID("[ALLOC] Pool %p skipped due to quarantine.", current_pool);
+            current_pool = current_pool->next;
+            continue;
+        }
+        if (current_pool->type == DAM_LAYER_GENERAL && current_pool->has_free) {
             block_header_t* block = search_in_free_list(current_pool, actual_size);
             if (block) {
                 *found_pool = current_pool;
