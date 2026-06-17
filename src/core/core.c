@@ -129,7 +129,7 @@ void dam_free(void* ptr) {
 
 void* dam_calloc(size_t nmemb, size_t size) {
     size_t total = nmemb * size;
-    void* ptr = dam_malloc(size);
+    void* ptr = dam_malloc(total);
     if (!ptr) return NULL;
     if (size <= DAM_GENERAL_MAX) memset(ptr, 0, total);
     return ptr;
