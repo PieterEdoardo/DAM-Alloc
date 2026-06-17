@@ -27,7 +27,7 @@ void dam_unregister_pool(pool_header_t* pool_header);
 pool_header_t* create_general_pool(size_t min_size);
 block_header_t* find_block_in_pools(size_t actual_size, pool_header_t** found_pool);
 void split_block_if_possible(block_header_t* block_header, size_t actual_size);
-void coalesce_if_possible(block_header_t* block_header, const pool_header_t* pool_header_t);
+block_header_t* coalesce_if_possible(block_header_t* block_header, pool_header_t* pool_header);
 uint32_t* dam_get_general_canary(void* ptr, block_header_t* block_header);
 void general_pool_quarantine(pool_header_t* pool_header);
 size_t align_up(size_t size, size_t alignment);
@@ -42,6 +42,11 @@ block_header_t* get_direct_header(void* ptr);
 block_header_t* get_direct_trace_header(void* ptr);
 size_t class_to_size(uint8_t class_index);
 uint8_t size_to_class(size_t size, uint8_t traced);
+void add_to_free_list(pool_header_t*, block_header_t* block_header);
+block_header_t* search_in_free_list(pool_header_t* pool_header, size_t actual_size);
+block_header_t* find_free_block_in_pools(pool_header_t** pool_header, size_t actual_size);
+void remove_from_free_list(pool_header_t* pool_header, block_header_t* block_header);
+free_block_header_t* get_free_block_header(block_header_t* block_header);
 
 
 /* allocator entry points */
@@ -54,7 +59,7 @@ void* dam_general_malloc(size_t size, const char* trace);
 void* dam_direct_malloc(size_t size, const char* trace);
 
 void dam_small_free(void* ptr, size_class_header_t* size_class_header);
-void dam_general_free(void* ptr, const pool_header_t* pool_header, block_header_t* block_header);
+void dam_general_free(void* ptr, pool_header_t* pool_header, block_header_t* block_header);
 void dam_direct_free(void* ptr);
 
 void* dam_small_realloc(void* ptr, size_t size, size_class_header_t* size_class_header, const char* trace);
@@ -76,7 +81,7 @@ void* dam_general_malloc_internal(size_t size, const char* trace);
 void* dam_direct_malloc_internal(size_t size, const char* trace);
 
 void dam_small_free_internal(void* ptr, size_class_header_t* size_class_header);
-void dam_general_free_internal(void* ptr, const pool_header_t* pool_header, block_header_t* block_header);
+void dam_general_free_internal(void* ptr, pool_header_t* pool_header, block_header_t* block_header);
 void dam_direct_free_internal(void* ptr);
 
 #include "dam/internal/dam_invariants.h"

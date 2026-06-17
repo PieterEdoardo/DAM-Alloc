@@ -519,7 +519,7 @@ int main(void) {
     test_quarantine();
     test_tracing();
 
-    // test_random_churn();      /* longest — run last */
+    test_random_churn();      /* longest — run last */
 
     dam_snapshot_t snapshot = {0};
     dam_snapshot(&snapshot);

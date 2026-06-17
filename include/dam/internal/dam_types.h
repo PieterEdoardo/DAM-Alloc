@@ -32,21 +32,26 @@ typedef struct block_header {
         size_t size;
     } prev;
     struct block_header* next_ptr;
-    struct pool_header* pool;
+    struct pool_header* pool_ptr;
     uint32_t magic;
     uint8_t is_free;
     uint8_t is_traced;
 } block_header_t;
 
-
+typedef struct free_block_header {
+    void* prev_ptr;
+    void* next_ptr;
+} free_block_header_t;
 
 typedef struct pool_header {
     void* memory;
     size_t size;
     dam_layer_type_t type;
     uint8_t read_only;
+    uint8_t has_free;
     struct pool_header* next;
     block_header_t* block_list;
+    block_header_t* free_list;
 } pool_header_t;
 
 typedef struct size_class {
