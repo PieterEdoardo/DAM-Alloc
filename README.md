@@ -82,7 +82,7 @@ Current design intentionally separates allocator layers and pool bookkeeping to 
 - [x] Torture-tested realloc correctness
 - [x] Multithreading (in progress)
 - [ ] Performance benchmarks
-- [ ] Extensive diagnostics tooling
+- [x] Diagnostics tooling
 
 ---
 
