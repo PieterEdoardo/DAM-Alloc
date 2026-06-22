@@ -80,7 +80,7 @@ Current design intentionally separates allocator layers and pool bookkeeping to 
 - [x] Direct allocator
 - [x] Cross-layer realloc
 - [x] Torture-tested realloc correctness
-- [x] Multithreading (in progress)
+- [x] Multithreading
 - [ ] Performance benchmarks
 - [x] Diagnostics tooling
 
