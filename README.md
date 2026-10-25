@@ -72,6 +72,6 @@ gcc your_program.c -I/path/to/DAM-Alloc/include -L/path/to/build -ldam -lpthread
 Note: DAM uses pthreads internally, so `-lpthread` is required.
 
 ## Planned Work
-Per-arena locking for improved multithreaded scalability
-Benchmark suite comparing DAM against glibc malloc across single and multithreaded workloads
+* Per-pool locking for improved multithreaded scalability
+* Benchmark suite comparing DAM against glibc malloc across single and multithreaded workloads
 
