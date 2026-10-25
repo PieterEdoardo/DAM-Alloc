@@ -15,6 +15,9 @@ add_library(dam
         src/util/thread.c
 )
 
+find_package(Threads REQUIRED)
+target_link_libraries(dam Threads::Threads)
+
 target_include_directories(dam PUBLIC
         ${PROJECT_SOURCE_DIR}/include
 )
