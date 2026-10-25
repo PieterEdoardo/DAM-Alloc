@@ -1,49 +1,77 @@
 # DAM-Alloc
 
-DAM (Defensive And Measurable allocator) is a general purpose malloc implementation meant as a serious portfolio project. It doesn't strive to be faster than anything, but it instead aims to get close to it, with an additonal suite of diagnostic, validation, and security features. It achieves this by abstracting them to the public API, and gives the programmer the ability to use them when they need it. DAM is also almost entirely configurable, and let's you even configure internals such as layer boundaries, or size class mount and size, to match programmer and/or system needs. It's core aim not just to be educational, but also be actually useful in production environments that require runtime memory diagnostics.
+DAM (Defensive And Measurable) is a general-purpose memory allocator for x86_64 Linux, implemented in C from scratch. It targets near-glibc performance while exposing a runtime diagnostics API — allocation tracing, heap validation, pool quarantining, and fragmentation introspection — that standard allocators don't expose to the application layer or don't provide at all.
 
+## Architecture
 
-## Features overview
-### Extended API
-Apart from the standard malloc, realloc, calloc, free, DAM features:
-* 16 byte traces to identify and follow allocations. Fully optional.
-* Memory snapshots that give an approximation of current allocation layer status.
-* Memory snapshots that give an apporximation of pool fragmentation.
-* Pointer metadata validation to check memory block integrity at any time.
-* Memory pool quarantining if corruption is found, making the pool 'read only' and will be skipped for future allocations.
-* Canaries and magic values to detect buffer overflows.
+DAM routes every allocation through one of three layers based on size:
 
-The elegance is in how these features work together. 16 byes is enough to fit an IP4 address. An allocation can be made with a ip-number set as it's trace, later user attempts to perform a buffer overflow attack which can be detected with the validation functinon. Pool get's quarantined, and the trace can be retrieved since it's stored right before the user data. User's ip-number can then be for exmaple blacklisted.
+1. **Small** (≤ 256 bytes) — segregated free lists with fixed size classes. A thread-local cache provides a lockless fast path, bypassing synchronization entirely for the common case.
+2. **General** (≤ 64KB) — pool-based allocator with per-pool free lists, splitting, and two-way coalescing. Pools grow on demand up to a configurable maximum.
+3. **Direct** (> 64KB) — one mmap call per allocation. No pool overhead, no fragmentation.
 
-### Optimization
-With memory allocators strucuture often dictates a large portion of the performance, DAM features:
-* 3 allocation layers with configurable boundaries.
-* Separate private threads for each allocation layer.
-* seggregated lists with size classes for small allocations.
-* Thread-local caches fast-path for small allocations. This skips the locks completely.
-* Arena's for medium allocations with two way O(1) coalescing and splitting, free lists, and configurable pool growing.
-* Direct mmap allocation layer for huge allocations. Configurable boundary means you can completely opt out for this layer.
+All three boundaries are configurable at compile time via dam_config.h.
 
-## Notable trade offs
+The general layer uses a payload overlay technique for its free list: when a block is free, the first 16 bytes of the user data region store the doubly linked free list pointers. This means no header inflation — the block header stays the same size whether the block is allocated or free.
+
+## Features
+### Runtime Diagnostics API
+
+Beyond the standard malloc/free/realloc/calloc, DAM exposes:
+
+* **Allocation tracing** — tag any allocation with a 16-byte string, retrievable at any point during its lifetime via dam_get_trace(). Traces are stored positionally between the block header and user data, and are naturally overwritten when the block is freed — tagged data never persists in free memory.
+* **Heap snapshots** — dam_snapshot() returns a point-in-time view of allocation counts and bytes used across all three layers, including thread cache statistics.
+Fragmentation reporting — dam_fragmentation() reports per-pool free bytes, largest free block, and fragmentation ratio.
+* **Pointer validation** — dam_validate_ptr() checks magic values, canaries, and alignment on any live pointer. Corruption is detected and reported without crashing the process.
+* **Pool quarantining** — on detected corruption, the affected pool is marked read-only. Future allocations skip it entirely; existing pointers into it remain accessible but the pool accepts no new allocations.
+
+These features compose. A 16-byte trace is enough to store an IPv4 address. If a validated pointer shows corruption, the pool is quarantined and the trace on the offending allocation is still readable — giving you the origin of the allocation that caused the corruption.
+
+### Configurability
+
+All major tunables live in dam_config.h:
+
+* Layer boundaries (DAM_SMALL_MAX, DAM_GENERAL_MAX)
+* Size class count and sizes
+* Pool growth parameters
+* Thread cache capacity per size class
+
+## Trade-offs
+* **Lock granularity** — DAM uses per-layer locks rather than per-arena locks. Under high thread contention on the general or direct layer, threads will serialize. The thread-local cache mitigates this for small allocations, which are the common case.
+* **Pool memory is not returned to the OS** — general layer pools are retained for reuse rather than munmap’d when empty. This trades virtual memory for allocation speed.
+* **Fragmentation** — the general layer can fragment under adversarial free patterns. The free list and coalescing mitigate this but don’t eliminate it.
+* **No calloc optimization** — DAM’s calloc explicitly zeroes memory rather than exploiting the OS guarantee that mmap’d pages arrive zeroed. This is a minor throughput loss on large zeroed allocations.
 
 ## Benchmarks
+***Coming soon** — single-threaded throughput comparison against glibc malloc across all three allocation layers.*
 
-## Example uses
-Snapshot example:
-```
-Pool: 0
-free: 66527136
-largest_free: 47136320
-fragmentation: 0.708528
+## Building
 
-tlc_used: 320
-tlc_free: 0
-size_classes: 5
-classes_bytes_used: 576240
-pools_active: 8
-pools_bytes_used: 534773760
-quarantined_pools: 1
-direct_allocations: 4
-direct_bytes_used: 13209600
-Grand total used: 535702 Kilobytes 
+DAM requires GCC or Clang and CMake 3.16+, targeting x86_64 Linux.
+
+```bash
+git clone https://github.com/PieterEdoardo/DAM-Alloc.git
+cd DAM-Alloc
+mkdir build && cd build
+cmake ..
+make
 ```
+This produces libdam.a in the build directory.
+
+### Linking against DAM
+
+In your own CMake project:
+```cmake
+add_subdirectory(DAM-Alloc)
+target_link_libraries(your_target dam)
+```
+Or manually with gcc:
+```bash
+gcc your_program.c -I/path/to/DAM-Alloc/include -L/path/to/build -ldam -lpthread -o your_program
+```
+Note: DAM uses pthreads internally, so -lpthread is required.
+
+## Planned Work
+Per-arena locking for improved multithreaded scalability
+Benchmark suite comparing DAM against glibc malloc across single and multithreaded workloads
+
